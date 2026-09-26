@@ -1,0 +1,14 @@
+You are given a string `s` of uppercase English letters.
+
+In one operation you may remove any occurrence of the substring `"AB"` or `"CD"` from `s`. The remaining characters close the gap, which can create a new `"AB"` or `"CD"`.
+
+Keep applying operations until neither substring occurs, and return the final string. The final string is the same no matter which occurrences you remove first.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= s.length <= 10^5`
+- `s` consists of uppercase English letters.
+
+**Follow-up (from the interview):** instead of the two fixed pairs you are given a list of strings to remove. Now the final string can depend on the order of the removals. How would you decide whether some string has more than one possible final result?

@@ -3,6 +3,10 @@ rules_version = '2';
 // Data model
 //   users/{uid}                    profile: { displayName, email, createdAt }
 //   users/{uid}/courses/{courseId} progress: { completed, quizzes, bookmarks, lastLessonId, updatedAt }
+//                                  (problem sets use the same document: solved problems are `completed`)
+//   users/{uid}/problems/{problemId}/submissions/{submissionId}
+//                                  submission: { language, code, verdict, passed, total, runtimeMs,
+//                                                createdAt, failure? } (immutable)
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -30,6 +34,32 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function optionalString(data, key, max) {
+      return !(key in data) || (data[key] is string && data[key].size() <= max);
+    }
+
+    function validFailure(failure) {
+      return failure is map
+        && failure.keys().hasOnly(['input', 'output', 'expected', 'error', 'stdout'])
+        && optionalString(failure, 'input', 2100)
+        && optionalString(failure, 'output', 2100)
+        && optionalString(failure, 'expected', 2100)
+        && optionalString(failure, 'error', 2100)
+        && optionalString(failure, 'stdout', 2100);
+    }
+
+    function validSubmission(data) {
+      return data.keys().hasOnly(['language', 'code', 'verdict', 'passed', 'total', 'runtimeMs', 'createdAt', 'failure'])
+        && data.language in ['javascript', 'typescript', 'python']
+        && data.code is string && data.code.size() <= 50000
+        && data.verdict in ['Accepted', 'Wrong Answer', 'Runtime Error', 'Time Limit Exceeded', 'Compile Error']
+        && data.total is int && data.total >= 0 && data.total <= 1000
+        && data.passed is int && data.passed >= 0 && data.passed <= data.total
+        && data.runtimeMs is number && data.runtimeMs >= 0
+        && data.createdAt == request.time
+        && (!('failure' in data) || validFailure(data.failure));
+    }
+
     match /users/{uid} {
       // The profile is written at sign-up, before the email is verified.
       allow read: if isOwner(uid);
@@ -42,6 +72,14 @@ service cloud.firestore {
           && courseId.size() <= 64
           && validProgress(request.resource.data);
         allow delete: if isOwner(uid) && isVerified();
+      }
+
+      match /problems/{problemId}/submissions/{submissionId} {
+        allow read: if isOwner(uid) && isVerified();
+        allow create: if isOwner(uid) && isVerified()
+          && problemId.size() <= 128
+          && validSubmission(request.resource.data);
+        allow update, delete: if false;
       }
     }
 

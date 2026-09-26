@@ -1,0 +1,17 @@
+Implement a class that stores intervals of integers and counts how many distinct integers they cover.
+
+Implement the `CountIntervals` class:
+
+- `CountIntervals()` creates an empty set of intervals.
+- `void add(int left, int right)` adds the interval `[left, right]`, which contains every integer `x` with `left <= x <= right`.
+- `int count()` returns the number of integers that are in **at least one** of the intervals added so far.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= left <= right <= 10^9`
+- At most `3 * 10^4` calls to `add` and `count` in total.
+- `count` may be called at any time, so it should be fast.
+
+**Follow-up:** support `remove(left, right)`, which uncovers every integer in the range.

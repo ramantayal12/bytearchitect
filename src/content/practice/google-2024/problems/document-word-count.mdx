@@ -1,0 +1,20 @@
+You are building a service that tracks the word counts of documents. Documents are identified by integer ids starting at `0`, and they can arrive in any order. A document may also be re-indexed with a new word count, which replaces its old count.
+
+Implement the `WordCounter` class:
+
+- `WordCounter()` creates an empty counter.
+- `void addDocument(int docId, int wordCount)` stores `wordCount` for document `docId`, replacing any previous count for that id.
+- `int getTotalCount(int numDocs)` returns the total number of words in documents whose ids are in the range `[0, numDocs)`. Documents that were never added count as `0` words.
+
+The report described this as "less DSA, more design". Think about which operation is frequent and how each call's cost grows.
+
+<Examples />
+
+**Constraints:**
+
+- `0 <= docId < 10^5`
+- `0 <= wordCount <= 10^4`
+- `1 <= numDocs <= 10^5`
+- At most `3 * 10^5` calls in total.
+
+**Follow-up:** documents are now spread across machines. How would you answer `getTotalCount` without collecting every document in one place?

@@ -1,0 +1,26 @@
+## Approach: sort and sweep
+
+Building the graph and running union-find or BFS is correct but can cost `O(n²)` just to list the edges: think of `n` intervals that all contain the point `0`.
+
+The components of an interval-overlap graph are exactly the blocks you get by **merging overlapping intervals**:
+
+- Intervals that overlap end up in the same merged block, since one edge joins them.
+- Inside a merged block, the intervals chain together. Sorted by left end, each interval starts at or before the furthest right end seen so far, so it overlaps an earlier interval in the block.
+- Different blocks are separated by a gap that no interval crosses, so there is no edge between them.
+
+So count the merged blocks:
+
+1. Sort by left endpoint.
+2. Sweep, keeping `reach`, the largest right endpoint of the current block.
+3. If the next interval starts **after** `reach`, it opens a new block (a new component). Otherwise it joins the current one. Either way, extend `reach`.
+
+The intervals are closed, so `[7,8]` and `[8,10]` connect: a new block needs `l > reach`, not `l >= reach`.
+
+## Complexity
+
+- **Time:** `O(n log n)` for sorting; the sweep is linear.
+- **Space:** `O(n)` for the sorted copy.
+
+## About the follow-up
+
+During the sweep, remember which interval currently reaches furthest right. When the next interval joins the block, add an edge between it and that interval. They overlap, because the new interval starts at or before `reach`. This gives `n - components` edges and no cycles, which is a spanning forest.

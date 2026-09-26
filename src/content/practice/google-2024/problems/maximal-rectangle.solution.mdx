@@ -1,0 +1,26 @@
+## Approach: a histogram per row
+
+Fix the **bottom row** of the rectangle. For each column, count how many consecutive `'1'`s end at that row: the column's height. The best rectangle with this bottom row is the **largest rectangle in the histogram** of those heights. Do this for every row and keep the maximum.
+
+Heights update in `O(cols)` per row: a `'1'` extends the column's run by one, a `'0'` resets it to `0`.
+
+### Largest rectangle in a histogram, in linear time
+
+For each bar, the widest rectangle of its height extends left and right until the first **shorter** bar on each side. A stack of column indices with increasing heights finds both boundaries:
+
+- When a bar at column `c` is shorter than the bar on top of the stack, the top bar can't extend further right. Pop it. Its right boundary is `c`, its left boundary is just after the new stack top, and its area is `height · (c - left)`.
+- Push `c` afterwards.
+
+A sentinel height of `0` after the last column flushes the stack. Each column is pushed and popped once per row.
+
+## Complexity
+
+- **Time:** `O(rows · cols)`.
+- **Space:** `O(cols)` for the heights and the stack.
+
+Checking every rectangle (`O(rows² · cols²)` pairs of corners, each in `O(1)` with prefix sums) is too slow for `200 x 200`.
+
+## About the follow-ups
+
+1. Whenever `best` improves, record the bottom row, `left`, `c - 1`, and the popped height. That's enough to recover the corners.
+2. For squares, let `size[r][c]` be the side of the largest all-`'1'` square with its bottom-right corner at `(r, c)`. It equals `1 + min(size[r-1][c], size[r][c-1], size[r-1][c-1])` for a `'1'`, and `0` otherwise.

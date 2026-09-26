@@ -1,0 +1,20 @@
+You receive a stream of integer measurements and need an average of the latest ones that ignores outliers.
+
+Implement the `TrimmedAverage` class:
+
+- `TrimmedAverage(int k, int trim)` creates an empty stream. Averages use the latest `k` values, after discarding the `trim` smallest and the `trim` largest of them.
+- `void add(int value)` appends `value` to the stream.
+- `int getAverage()` returns `-1` if fewer than `k` values have been added. Otherwise take the **latest `k` values**, remove the `trim` smallest and the `trim` largest of them (if values repeat, remove that many copies), and return the average of the remaining `k - 2·trim` values, **rounded down**.
+
+In the interview, the first version was a plain average of the latest `k` values, and the outlier handling was added on top.
+
+<Examples />
+
+**Constraints:**
+
+- `3 <= k <= 10^5`
+- `1 <= trim` and `2 · trim < k`
+- `1 <= value <= 10^5`
+- At most `2 * 10^5` calls to `add` and `getAverage` in total.
+
+**Follow-up:** values can now be any integer up to `10^9`. What changes?

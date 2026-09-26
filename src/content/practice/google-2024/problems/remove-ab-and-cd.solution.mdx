@@ -1,0 +1,19 @@
+## Approach: stack
+
+Simulating the removals directly (find a pair, cut it out, search again) is quadratic: `"AAA…BBB"` removes a single pair per pass.
+
+Notice that a removal only ever joins the character before the pair with the character after it. So scan left to right and keep the characters that survive so far on a stack:
+
+- If the current character completes a pair with the top of the stack (`A` then `B`, or `C` then `D`), pop the top. Both characters are gone.
+- Otherwise push the current character.
+
+The stack always holds a string with no removable pair. When a pair is removed, the new neighbours are the new top of the stack and the next character, which is exactly the next comparison. The characters left on the stack are the answer.
+
+## Complexity
+
+- **Time:** `O(n)`. Each character is pushed and popped at most once.
+- **Space:** `O(n)` for the stack.
+
+## About the follow-up
+
+With an arbitrary list of patterns, removals no longer commute. For example, with the patterns `"AB"` and `"BC"`, the string `"ABC"` can end as `"C"` or `"A"`. Conflicts come from patterns that overlap: a suffix of one is a prefix of another, or one pattern contains another. That's where to start the analysis. The candidate in the report found the overlaps with a multi-pattern matcher (Aho–Corasick).

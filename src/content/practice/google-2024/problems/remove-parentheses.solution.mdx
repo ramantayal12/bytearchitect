@@ -1,0 +1,31 @@
+## Approach: a stack of signs
+
+Only minus signs matter. A variable's final sign is the product of its own operator and the operators in front of every parenthesis that encloses it. In `a-(b-(c-d))`, `c` is the first term of `(c-d)`, so it has no operator of its own, and it sits inside two parentheses that are each preceded by `-`: its sign is `(-1) · (-1) = +1`. `d` also has its own `-`, so its sign is `(-1)³ = -1`.
+
+Scan the formula once and keep:
+
+- `signs`: a stack with the sign each enclosing parenthesis applies to its contents. It starts as `[+1]` for the whole formula.
+- `sign`: the sign the **next** variable will get.
+
+For each character:
+
+| Character | Action |
+| --- | --- |
+| `+` | `sign = top of signs` |
+| `-` | `sign = -(top of signs)` |
+| `(` | push `sign`: everything inside inherits it |
+| `)` | pop |
+| a variable | emit it with `sign` (omit a leading `+` for the first variable) |
+
+Unary operators need no special case. After `(`, the top of the stack is the parenthesis's own sign, so `-(-a)` gives `a` a sign of `-(-1) = +1`.
+
+Collect the output pieces in a list and join them at the end. Repeatedly concatenating immutable strings can make the solution quadratic on the long hidden test.
+
+## Complexity
+
+- **Time:** `O(n)` for a single pass.
+- **Space:** `O(n)` for the output, plus `O(depth)` for the stack.
+
+## About the follow-up
+
+Tokenize first, reading a whole identifier or number at a time. Instead of a stack of `±1`, keep a stack of **multipliers**: `2*(a-b)` pushes `2 · sign`. Each term then gets a coefficient rather than a sign, and you'd print terms like `2a` and `-2b`.

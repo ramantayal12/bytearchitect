@@ -1,0 +1,18 @@
+## Approach: greedy cuts
+
+A dynamic program over split points works (`best[i]` = best score for the first `i` elements), but it is `O(n²)` and times out for `n = 10^5`.
+
+Instead, scan left to right with a running sum and **close a part the moment its sum reaches `threshold`**, then start a new part.
+
+Why is cutting as early as possible optimal? Consider any optimal split and its first scoring part. Ending that part at the earliest index where the prefix reaches the threshold can only leave more elements for the remaining parts. Repeating this argument part by part shows the greedy score is never worse.
+
+What about the elements after the last cut? Their sum is below the threshold, so they can't form a scoring part of their own. Append them to the last scoring part: because every number is positive, that part's sum only grows and still counts. If no cut happened at all, the whole array is one part with score `0`.
+
+## Complexity
+
+- **Time:** `O(n)`, a single pass.
+- **Space:** `O(1)`.
+
+## About the follow-up
+
+Positivity is what makes the greedy work. With negative numbers, appending leftovers can drop a part below the threshold, and cutting early is no longer safe. Fall back to the dynamic program, and speed it up with prefix sums and a data structure that finds the best earlier split point.

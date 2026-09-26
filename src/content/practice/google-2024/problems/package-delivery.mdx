@@ -1,0 +1,20 @@
+You are given an `m x n` map `grid` as a list of strings:
+
+- `'W'` is the warehouse (there is exactly one),
+- `'P'` is a packing facility holding one package,
+- `'.'` is open ground, and
+- `'#'` is a wall.
+
+You start at the warehouse and must bring every package to it. You can carry **only one package at a time**: walk to a facility, pick up its package, and walk back to the warehouse. Each move goes to a horizontally or vertically adjacent cell that isn't a wall and costs `1`. You may walk through facilities and the warehouse.
+
+Return the minimum total distance walked to deliver all packages, or `-1` if some facility can't be reached.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= m, n <= 300`
+- `grid[i]` has length `n` and consists of `'W'`, `'P'`, `'.'` and `'#'`.
+- There is exactly one `'W'` and at least one `'P'`.
+
+**Follow-up (from the interview):** you can now carry up to `k` packages at once, and pick them up from different facilities on the same trip. How would you approach it?

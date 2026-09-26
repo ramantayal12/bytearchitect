@@ -1,0 +1,16 @@
+You are given an undirected graph whose vertices are labelled with intervals: vertex `i` carries the closed interval `intervals[i] = [l, r]`. Two vertices are joined by an edge when their intervals **overlap**, that is, share at least one point.
+
+The interviewer framed this as a spanning-tree question: a spanning forest of a graph contains one tree for each connected component.
+
+Return the number of trees in a spanning forest of this graph, which is the number of its **connected components**.
+
+The graph can have `O(n²)` edges, so avoid building it.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= intervals.length <= 10^5`
+- `0 <= l <= r <= 10^9`
+
+**Follow-up:** return the edges of one spanning forest (`n - components` edges) in `O(n log n)`.

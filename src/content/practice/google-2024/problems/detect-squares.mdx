@@ -1,0 +1,17 @@
+Points on a 2D plane arrive as a stream. Design a data structure that stores them and, for a query point, counts the squares it would complete.
+
+Implement the `DetectSquares` class:
+
+- `DetectSquares()` creates an empty structure.
+- `void add(int[] point)` adds `point = [x, y]`. The same point may be added more than once; each copy counts separately.
+- `int count(int[] point)` returns the number of ways to choose **three stored points** that, together with the query point, form an **axis-aligned square with positive area**. Different copies of the same stored point count as different choices. The query point itself is not added.
+
+<Examples />
+
+**Constraints:**
+
+- `point.length == 2`
+- `0 <= x, y <= 1000`
+- At most `3000` calls to `add` and `count` in total.
+
+**Follow-up:** squares no longer need to be axis-aligned (they may be rotated). How would you count them?

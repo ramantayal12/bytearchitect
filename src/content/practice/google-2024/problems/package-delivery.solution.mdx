@@ -1,0 +1,20 @@
+## Approach: one BFS from the warehouse
+
+Carrying one package at a time makes the deliveries independent. Every package costs a round trip `warehouse → facility → warehouse`, and the shortest round trip is twice the shortest-path distance between them. So the answer is:
+
+```text
+sum over facilities P of 2 · dist(W, P)
+```
+
+The grid is unweighted, so breadth-first search finds shortest paths. Running a BFS from **each facility** works, but with up to `90,000` facilities that's `O((mn)²)`. Every search ends at the same place, though: the warehouse. Run a **single BFS from the warehouse** instead, and read off each facility's distance.
+
+If some facility was never reached, a wall encloses it: return `-1`.
+
+## Complexity
+
+- **Time:** `O(mn)`, one BFS plus one scan of the grid.
+- **Space:** `O(mn)` for the distances and the queue.
+
+## About the follow-up
+
+With a capacity of `k`, a trip can visit several facilities, and the cost of a trip depends on the order of the stops. Choosing the trips is a capacitated vehicle routing problem, which is NP-hard in general. In an interview, discuss exact search over subsets for a handful of facilities (BFS distances between all facilities, then a DP over bitmasks), and heuristics for larger inputs, such as grouping nearby facilities into trips.

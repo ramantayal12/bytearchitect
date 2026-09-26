@@ -1,0 +1,33 @@
+## Start simple: the plain moving average
+
+Without outliers, keep the latest `k` values in a queue and a running sum. `add` pushes the new value, and pops (and subtracts) the oldest once the queue holds more than `k`. The average is `sum / k`. Everything is `O(1)`.
+
+Trimming breaks this, because which values count as the `trim` smallest and largest changes as the window slides. Sorting the window on every `getAverage` is `O(k log k)` per call, far too slow for `k = 10^5`.
+
+## Approach: order statistics over values with a Fenwick tree
+
+The sum of the middle values equals
+
+```text
+(sum of the (k - trim) smallest) − (sum of the trim smallest)
+```
+
+so all you need is "sum of the `t` smallest values in the window", for any `t`.
+
+Values are at most `10^5`, so index two Fenwick trees **by value**: `count[v]` for how many window values equal `v`, and `sum[v]` for their total. `add` inserts the new value with `+1`, and removes the value leaving the window with `-1`.
+
+To get the sum of the `t` smallest values, **descend** the Fenwick tree in powers of two, the same way you'd find the `t`-th smallest element. Keep moving right while the count on the left is still less than `t`, accumulating counts and sums. You stop just before the value `pos + 1` that contains the `t`-th smallest element. The remaining `remaining` copies all equal `pos + 1`.
+
+## Complexity
+
+- `add`: `O(log V)`, with `V = 10^5` the largest value.
+- `getAverage`: `O(log V)`, two descents.
+- **Space:** `O(V + k)`.
+
+## Alternative: three balanced multisets
+
+Split the window into `low` (the `trim` smallest), `mid` and `high` (the `trim` largest) sorted multisets, and keep a running sum of `mid`. Inserting or removing a value rebalances at most one element between neighbouring sets, in `O(log k)`. This works for any value range, but it's much more code without a built-in sorted multiset (Java's `TreeMap`, C++'s `multiset`).
+
+## About the follow-up
+
+With values up to `10^9`, the Fenwick tree can't be indexed by value directly. If all values are known up front, compress them to ranks. Otherwise use the three-multiset approach, or a dynamic segment tree over the value range.

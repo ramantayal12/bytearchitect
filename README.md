@@ -16,11 +16,14 @@ It ships with one course, **System Design Mastery**:
 
 The platform is multi-course ready: a course is a self-contained folder of MDX files plus an outline.
 
+It also has a LeetCode-style **interview practice** section, with one problem set, **Google Interview Questions (2024)**: 19 coding questions reported from Google phone screens and onsites, compiled from [this LeetCode Discuss post](https://leetcode.com/discuss/post/6185127/2024-google-interview-questions-compilat-mjrf/). Each problem has a statement, examples, hidden tests, an editorial, and reference solutions in JavaScript and Python. Learners write code in an in-browser editor, **Run** it against the examples or their own inputs, and **Submit** it against every hidden test in JavaScript, TypeScript or Python. Verdicts follow LeetCode (Accepted, Wrong Answer, Runtime Error, Time Limit Exceeded, Compile Error), and each submission is saved with its runtime and the first failing test.
+
 ## Tech stack
 
 - **App:** React 19, TypeScript, Vite, React Router, TanStack Query
 - **UI:** Tailwind CSS v4, shadcn/ui (Radix), lucide icons
 - **Content:** MDX (`@mdx-js/rollup`), remark/rehype plugins, Shiki syntax highlighting, and Mermaid rendered to inline SVG at build time with `mermaid-isomorphic`, so no Mermaid runtime is shipped
+- **Code runner:** CodeMirror 6 editor; code runs in a Web Worker, with TypeScript types stripped by Sucrase and Python 3 run by [Pyodide](https://pyodide.org) (CPython compiled to WebAssembly, loaded from the jsDelivr CDN on the first Python run)
 - **Backend:** Firebase Auth (email/password + verification) and Firestore Lite; Firebase Hosting
 - **Quality:** Vitest + Testing Library, ESLint, Prettier
 
@@ -85,11 +88,16 @@ src/
   features/                 Feature slices, each with a public index.ts
     auth/                   AuthService interface + Firebase adapter, guards, auth pages
     courses/                Course engine: outline DSL, defineCourse, catalog/overview/lesson pages
+    practice/               Problem sets, code runner (worker, JS/TS/Python harnesses, judge),
+                            SubmissionRepository + Firestore adapter, workspace pages
     progress/               ProgressRepository interface + Firestore adapter, hooks
     quiz/                   Quiz types, grading logic and components
   content/courses/
     index.ts                Registered courses
     system-design/          course.ts (outline), lessons/<chapter>/<slug>.mdx + .quiz.ts
+  content/practice/
+    index.ts                Registered problem sets
+    google-2024/            set.ts (outline), problems/<slug>.problem.ts + .mdx + .solution.mdx
   lib/firebase.ts           The only place the Firebase app is initialized
 ```
 
@@ -158,6 +166,44 @@ A question with several correct options becomes multi-select.
 
 Mermaid gotchas: avoid `;` and `#` inside diagram text, and quote labels that contain punctuation.
 
+### Adding a practice problem
+
+Each entry in `src/content/practice/<set>/set.ts` links to the report it came from and maps to three files in `problems/`:
+
+- **`<slug>.problem.ts`**: the signature, examples, hidden tests and reference solutions.
+- **`<slug>.mdx`**: the statement. Put `<Examples />` where the examples go; they are rendered from the data, so they always match the tests.
+- **`<slug>.solution.mdx`**: the editorial.
+
+```ts
+import { defineProblem } from '@/features/practice'
+
+export default defineProblem({
+  signature: {
+    kind: 'function', // or 'class' for design problems, driven by LeetCode-style operation lists
+    name: 'twoSum',
+    params: [
+      { name: 'nums', type: 'int[]' },
+      { name: 'target', type: 'int' },
+    ],
+    returns: 'int[]',
+  },
+  examples: [{ args: [[2, 7, 11, 15], 9], expected: [0, 1], explanation: '…' }],
+  tests: [{ args: [[3, 3], 6], expected: [0, 1] }],
+  solution: { javascript: `function twoSum(nums, target) { … }`, python: `class Solution: …` },
+})
+```
+
+The signature generates the starter code for every language. The JavaScript reference solution also computes the expected output when a learner runs their own inputs.
+
+`yarn test` judges both reference solutions against every test with the same harness the browser uses (Python through the `pyodide` package). It also fails on:
+
+- outline entries without files, and files without outline entries;
+- tests that don't match the signature's types, and duplicate test inputs;
+- starter code that doesn't compile;
+- statements without `<Examples />` or constraints, and MDX that doesn't compile.
+
+Include a few large tests so that brute-force solutions exceed the time limit (3 s per test for JavaScript and TypeScript, 8 s for Python). Build large inputs with code, such as `Array.from(…)`, instead of literal data.
+
 ### Adding a course
 
 1. Create `src/content/courses/<id>/` with `course.ts` (the `meta` and `parts` outline), `files.ts` (the two `import.meta.glob` calls; copy from `system-design`), `index.ts` (calls `defineCourse`) and `lessons/`.
@@ -213,13 +259,13 @@ Hosting serves app routes (any path without a file extension) as `no-cache`, so 
 
 Limits can change, so check [Firebase pricing](https://firebase.google.com/pricing) and the [Auth limits](https://firebase.google.com/docs/auth/limits).
 
-| Resource                               | Spark limit                                                    | How this app stays within it                                                                                                                                                                                                                                                 |
-| -------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hosting storage                        | 10 GB                                                          | The build is about 17 MB                                                                                                                                                                                                                                                     |
-| Hosting transfer                       | 360 MB/day                                                     | About 205 KB gzip for the app shell; lessons are lazy chunks of about 5–40 KB gzip; diagrams are inline SVG with no Mermaid runtime; hashed assets are cached as `immutable`, so returning visitors re-download almost nothing. This is roughly 1,500+ new visitors per day. |
-| Firestore                              | 50K reads, 20K writes, 20K deletes per day; 1 GiB              | One progress document per learner per course, cached by React Query, with one write per completion or quiz submission. This supports roughly 1,000+ daily active learners.                                                                                                   |
-| Auth                                   | Email/password sign-in; generous monthly active user allowance | Standard email/password accounts                                                                                                                                                                                                                                             |
-| Verification and password-reset emails | Daily caps (password reset is the lowest, around 150/day)      | Resend buttons have a cooldown; watch the reset cap if you grow                                                                                                                                                                                                              |
+| Resource                               | Spark limit                                                    | How this app stays within it                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| -------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosting storage                        | 10 GB                                                          | The build is about 17 MB                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Hosting transfer                       | 360 MB/day                                                     | About 205 KB gzip for the app shell; lessons are lazy chunks of about 5–40 KB gzip; diagrams are inline SVG with no Mermaid runtime; hashed assets are cached as `immutable`, so returning visitors re-download almost nothing. This is roughly 1,500+ new visitors per day. The practice workspace loads the editor (about 110 KB gzip) and one language grammar lazily; the Python runtime (about 6 MB compressed) comes from the jsDelivr CDN, not Hosting. |
+| Firestore                              | 50K reads, 20K writes, 20K deletes per day; 1 GiB              | One progress document per learner per course, cached by React Query, with one write per completion or quiz submission. This supports roughly 1,000+ daily active learners. Code submissions add one write each; "Run" writes nothing, and a problem's history (at most 20 reads) is fetched only when the Submissions tab opens.                                                                                                                               |
+| Auth                                   | Email/password sign-in; generous monthly active user allowance | Standard email/password accounts                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Verification and password-reset emails | Daily caps (password reset is the lowest, around 150/day)      | Resend buttons have a cooldown; watch the reset cap if you grow                                                                                                                                                                                                                                                                                                                                                                                                |
 
 If you outgrow Spark, upgrading to **Blaze** keeps the same free allowances and bills only for usage above them.
 
@@ -237,9 +283,12 @@ The deploy job is skipped until `VITE_FIREBASE_PROJECT_ID` is set. CI deploys Ho
 ## Data model and security
 
 - `users/{uid}`: profile (`displayName`, `email`, `createdAt`).
-- `users/{uid}/courses/{courseId}`: progress (`completed`, `quizzes`, `lastLessonId`, `updatedAt`).
+- `users/{uid}/courses/{courseId}`: progress (`completed`, `quizzes`, `lastLessonId`, `updatedAt`). Problem sets use the same document, keyed by set id: solved problems are `completed`.
+- `users/{uid}/problems/{setId}__{slug}/submissions/{id}`: one immutable document per submission (`language`, `code`, `verdict`, `passed`, `total`, `runtimeMs`, `createdAt`, and the first failure's `input`, `output`, `expected`, `error` and `stdout`, truncated).
 
-`firestore.rules` lets users read and write only their own documents, requires a verified email for progress, validates field names and sizes, and denies everything else.
+`firestore.rules` lets users read and write only their own documents, requires a verified email for progress and submissions, validates field names and sizes, makes submissions immutable with a server timestamp, and denies everything else.
+
+Learner code never leaves the browser except as a saved submission. It runs in a Web Worker, which has no access to the page. JavaScript and TypeScript get a fresh worker per run, and any run that exceeds its time limit is stopped by terminating the worker.
 
 ## License
 

@@ -1,0 +1,19 @@
+A group of people stood in a queue, and then got shuffled. Each person remembers two numbers, `people[i] = [h, k]`:
+
+- `h` is their height, and
+- `k` is how many people in front of them in the original queue were **at least as tall** (height `>= h`).
+
+Reconstruct the original queue from `people`, and return it as a list in queue order, front first.
+
+The input always comes from a real queue, so exactly one answer exists.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= people.length <= 2000`
+- `0 <= h <= 10^6`
+- `0 <= k < people.length`
+- `people` describes a valid queue.
+
+**Follow-up:** can you avoid the `O(n²)` cost of inserting into the middle of an array?

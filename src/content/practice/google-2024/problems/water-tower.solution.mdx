@@ -1,0 +1,16 @@
+## Approach: search uphill from each city
+
+The direct approach tries every cell as the tower and flood-fills downhill from it to see whether both cities get water. That is one `O(mn)` search per cell, `O((mn)²)` in total, which is far too slow for a `200 x 200` grid.
+
+Reverse the direction instead. Water from cell `T` reaches city `C` exactly when there is a path from `C` back to `T` that only ever steps to a neighbour of **equal or greater** height. So run one breadth-first search from each city, stepping uphill:
+
+1. `A` = every cell reachable uphill from `city1`, i.e. every cell that can supply `city1`.
+2. `B` = the same for `city2`.
+3. The valid tower positions are `A ∩ B`. Return the highest one, scanning in row-major order so that ties go to the smallest row and then the smallest column.
+
+If the intersection is empty, return `[-1, -1]`. Both searches include their own city, so a city can be the answer, as in example 2.
+
+## Complexity
+
+- **Time:** `O(mn)`. Each search visits every cell at most once.
+- **Space:** `O(mn)` for the visited grids and queues.

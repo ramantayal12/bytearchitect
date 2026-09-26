@@ -1,0 +1,22 @@
+## Approach: look for a gap between x-ranges
+
+A vertical cut only cares about each topping's x-range `[x1, x2]`; the y-coordinates don't matter. A cut at `x = c` is valid when every topping lies entirely to the left (`x2 <= c`) or entirely to the right (`x1 >= c`), with at least one on each side.
+
+That's the classic "merge intervals" question in disguise: a valid cut exists exactly when the x-ranges, once merged, **don't** form a single block.
+
+1. Sort the toppings by `x1`.
+2. Sweep from left to right, keeping `reach`, the largest `x2` seen so far.
+3. Before adding the next topping, if `reach <= x1` of that topping, a cut at `x = reach` works. Everything before it ends at or before `reach`, and everything from this topping on starts at or after `x1 >= reach`. Both sides are non-empty, because the check only starts at the second topping.
+
+If the sweep finishes without finding a gap, every cut goes through a topping or leaves one side bare.
+
+Note the `<=`: toppings that only touch, such as `[0, 2]` and `[2, 3]` in example 2, can be separated by a cut along the shared edge.
+
+## Complexity
+
+- **Time:** `O(n log n)` for sorting; the sweep is linear.
+- **Space:** `O(n)` for the sorted spans.
+
+## About the follow-up
+
+A horizontal cut is the same sweep over the y-ranges, so run both. For equal counts on each side, you need a gap at a specific position: after sorting, a cut with `k` toppings on the left exists only between the `k`-th and `(k+1)`-th toppings in sweep order, and only if the running `reach` after `k` toppings is `<=` the next left edge.
