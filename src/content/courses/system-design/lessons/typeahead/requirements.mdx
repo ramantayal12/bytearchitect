@@ -1,0 +1,67 @@
+---
+title: Requirements of Typeahead Suggestions
+---
+
+This lesson scopes the typeahead service and estimates its load.
+
+## Functional requirements
+
+- **Suggest completions:** as the user types, return the top suggestions (say 5 to 10) for the current prefix, ranked mainly by popularity.
+- **Reflect popularity changes:** trending queries should appear in suggestions within a reasonable time, from minutes to hours.
+- **Filter:** never suggest offensive, dangerous or legally restricted completions, and support fast removal of bad suggestions.
+- **Language and region:** suggestions depend on the user's language and region.
+
+Optional extensions:
+
+- **Personalization:** boost the user's own recent searches.
+- **Spelling tolerance:** handle small typos in the prefix.
+
+Out of scope: the search results page itself, and rich suggestions with images or entity cards.
+
+## Non-functional requirements
+
+- **Very low latency:** server-side processing should take a few milliseconds, so the full round trip stays well under 100 ms.
+- **High availability:** if typeahead fails, search still works, so graceful degradation is acceptable, but suggestions should rarely disappear.
+- **Scalability:** handle peaks of hundreds of thousands of requests per second.
+- **Eventual consistency:** suggestions may lag actual query popularity by minutes or hours.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Searches per day | 5 billion |
+| Average query length | 20 characters |
+| Keystrokes that trigger a request | about 1 in 3, thanks to client debouncing |
+| Unique queries worth suggesting | about 100 million |
+| Average query string size | 30 bytes |
+
+**Suggestion requests:** 5 billion searches × 20 characters ÷ 3 ≈ 33 billion requests per day, about 385,000 per second on average and perhaps 1 million per second at peak. This is far more than the search engine's 58,000 searches per second.
+
+**Data size:** 100 million unique queries × 30 bytes = 3 GB of raw query strings. A trie adds structure and per-node top suggestions, perhaps multiplying this by 5 to 10, so 15 to 30 GB. That fits in the memory of a large server, or in a few smaller partitions.
+
+**Query logs:** 5 billion searches per day × about 100 bytes of log data (query, timestamp, region, language) = 500 GB per day of logs feeding the aggregation pipeline.
+
+<Callout type="note">
+Client-side techniques reduce load a lot. **Debouncing** waits for a brief pause in typing, such as 50 to 100 ms, before sending a request; **caching** recent responses in the browser answers backspaces and repeated prefixes instantly; and **short prefixes** such as a single character can be served from a static, CDN-cached file.
+</Callout>
+
+## Server estimation
+
+If one server answers about 20,000 suggestion requests per second from memory, 1 million per second at peak needs about 50 servers per full copy of the data, distributed across regions. Because the data is only tens of gigabytes, each server or small group of servers can hold a full replica, and capacity scales by adding replicas.
+
+## Ranking inputs
+
+Although popularity is the main signal, ranking can combine:
+
+- **Frequency** of the query over a recent window, weighted towards recent days.
+- **Freshness:** sudden spikes in queries about new events.
+- **Locality:** queries popular in the user's region.
+- **Result quality:** queries that lead to clicks rather than immediate reformulation.
+
+<KeyTakeaways>
+- Typeahead returns the top 5 to 10 popular completions for a prefix, filtered for safety and localized.
+- Server processing must take only milliseconds; eventual consistency with query popularity is fine.
+- Requests can reach about a million per second at peak, far more than searches.
+- The suggestion data is only tens of gigabytes, so it fits in memory and can be fully replicated.
+- Debouncing, client caching and CDN-served short prefixes cut load significantly.
+</KeyTakeaways>

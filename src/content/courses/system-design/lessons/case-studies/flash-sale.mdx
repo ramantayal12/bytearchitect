@@ -1,0 +1,83 @@
+---
+title: Surviving Flash-Sale Traffic Spikes
+---
+
+Flash sales, limited product drops and annual shopping events concentrate a year's worth of excitement into minutes. Traffic can jump to ten or a hundred times normal levels, all aimed at a few products with limited stock. The system must stay up, never oversell inventory and give customers a fair chance. This case study applies several building blocks to a problem defined by extreme, predictable spikes.
+
+## Requirements
+
+- **Functional:** browse deals, add to cart, check out, and see accurate stock ("only 12 left").
+- **Non-functional:** stay available under a massive spike, never sell more units than exist, keep checkout latency reasonable, and degrade gracefully rather than crash.
+- **Scale:** normal traffic of 20,000 requests per second might spike to 1 million per second at the start of a sale, with most requests hitting a handful of product pages.
+
+## Principles
+
+**1. Prepare, because the spike is predictable.** Run load tests at expected peak traffic, pre-scale services and databases, warm caches with deal pages and freeze risky deployments before the event.
+
+**2. Serve reads from the edge.** Product pages, images and deal listings are cached at the CDN. Stock counts shown on pages can be approximate and refreshed every few seconds; the final check happens at checkout.
+
+**3. Protect the core with admission control.** A waiting room or token-based admission lets only as many shoppers into checkout as the inventory and payment systems can handle.
+
+**4. Make inventory decrements cheap and atomic.** This is the heart of the problem.
+
+## Inventory without overselling
+
+A naive design decrements stock in a single database row for each order. With thousands of orders per second for one product, that row becomes a **hot spot**, and lock contention collapses throughput.
+
+<Slides title="Scaling hot inventory">
+<Slide caption="1. Naive: every checkout decrements one row. Contention on the hot row limits throughput.">
+
+```mermaid
+flowchart LR
+  O1["Order"] --> Row[("stock row: 10000")]
+  O2["Order"] --> Row
+  O3["Order"] --> Row
+```
+
+</Slide>
+<Slide caption="2. Split stock into buckets, each holding part of the inventory. Orders decrement a random bucket, spreading contention.">
+
+```mermaid
+flowchart LR
+  O["Orders"] --> B1[("bucket 1: 2500")]
+  O --> B2[("bucket 2: 2500")]
+  O --> B3[("bucket 3: 2500")]
+  O --> B4[("bucket 4: 2500")]
+```
+
+</Slide>
+<Slide caption="3. Reserve in a fast in-memory store with atomic decrements, then record orders asynchronously through a queue into the database.">
+
+```mermaid
+flowchart LR
+  C["Checkout"] --> R[("In-memory counter: atomic decrement if positive")]
+  R -->|reserved| Q["Order queue"] --> DB[("Orders DB")]
+```
+
+</Slide>
+</Slides>
+
+The in-memory approach performs a single atomic "decrement if greater than zero" operation per purchase attempt, which can handle hundreds of thousands of operations per second. If the decrement succeeds, the customer has a **reservation** and proceeds to payment; the order is written durably through a queue. If payment fails or times out, the reservation is released and the unit returns to stock. Periodic reconciliation compares the in-memory counters with the durable order records.
+
+Bucketed inventory has a subtle issue: one bucket may run out while others still have stock. The checkout retries another bucket, and a rebalancer moves remaining units between buckets near the end of the sale.
+
+## Graceful degradation
+
+When load exceeds capacity despite preparation:
+
+- **Shed non-essential features:** recommendations, reviews and personalized banners are turned off with feature flags, freeing capacity for browsing and checkout.
+- **Rate limit** per user and per IP to stop bots from consuming capacity.
+- **Queue rather than fail:** asynchronous order processing lets the system accept orders quickly and confirm them seconds later.
+- **Fail with a friendly message** when a product sells out, served from cache.
+
+<Callout type="tip">
+Flash-sale designs are mostly about isolation: keep the hot path (reserve, pay, confirm) small and protected, and push everything else to caches, queues or off switches.
+</Callout>
+
+<KeyTakeaways>
+- Flash-sale spikes are predictable, so load testing, pre-scaling and cache warming are essential.
+- Reads are served from the CDN with approximate stock; accurate checks happen at checkout.
+- Admission control protects inventory and payment systems from the full spike.
+- Atomic in-memory reservations, bucketed stock and asynchronous order writes avoid hot-row contention and overselling.
+- Graceful degradation sheds non-essential features and queues work rather than failing.
+</KeyTakeaways>

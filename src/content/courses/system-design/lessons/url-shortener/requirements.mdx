@@ -1,0 +1,67 @@
+---
+title: Requirements and Estimation
+---
+
+A URL shortener turns a long address such as `https://example.com/articles/2024/how-we-scaled-our-database?utm_source=newsletter` into a short one like `https://sho.rt/aZ3kP9x`. When someone visits the short link, the service redirects them to the original. It is one of the most common warm-up design problems because it is easy to understand yet raises real questions about key generation, storage, caching and abuse.
+
+## Functional requirements
+
+- **Shorten:** given a long URL, return a unique short URL.
+- **Redirect:** visiting a short URL redirects to the original long URL.
+- **Custom aliases:** users may choose their own short key, such as `sho.rt/launch`, if it is available.
+- **Expiration:** links may have an expiry time, after which they stop redirecting.
+- **Deletion:** the creator can delete a link.
+- **Analytics (optional):** the creator can see click counts over time, by country and referrer.
+
+## Non-functional requirements
+
+- **High availability for redirects.** If redirects fail, every link ever shared breaks. Redirects matter far more than creation.
+- **Low latency for redirects**, ideally a few milliseconds of server time.
+- **Unpredictable keys.** Short keys should not be guessable in sequence, so people cannot enumerate private links.
+- **Durability.** Once created, a mapping must not be lost.
+- **Scalability** to billions of links.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| New short URLs per month | 200 million |
+| Read-to-write ratio | 100:1 |
+| Retention | 5 years by default |
+| Average record size | 500 bytes (long URL, key, owner, timestamps) |
+
+**Writes:** 200 million ÷ (30 × 86,400) ≈ 77 new URLs per second on average.
+
+**Reads:** 100 × 77 ≈ 7,700 redirects per second on average; plan for peaks of perhaps 20,000 to 30,000 per second when links go viral.
+
+**Total links over 5 years:** 200 million × 12 × 5 = 12 billion.
+
+**Storage:** 12 billion × 500 bytes = 6 TB, plus indexes and replication. This fits comfortably in a sharded key-value store.
+
+**Bandwidth:** redirect responses are tiny, well under 1 KB, so 30,000 per second is only about 15 to 30 MB per second.
+
+**Cache:** following the 80/20 rule, caching the hottest 20 percent of daily redirect keys is plenty. With about 660 million redirects per day, of which a much smaller number of distinct URLs, caching even 100 million entries at 500 bytes is 50 GB, which fits on a few cache nodes.
+
+## How long should keys be?
+
+Keys use the 62 characters `[a-z A-Z 0-9]`. The number of possible keys grows quickly with length:
+
+| Key length | Possible keys |
+| --- | --- |
+| 6 | 62⁶ ≈ 56.8 billion |
+| 7 | 62⁷ ≈ 3.5 trillion |
+| 8 | 62⁸ ≈ 218 trillion |
+
+Six characters would cover 12 billion links, but the key space would be over 20 percent used, making random collisions frequent and enumeration of existing links easy. **Seven characters** give a key space about 300 times larger than needed, keeping collisions rare and keys hard to guess.
+
+<Callout type="interview">
+Always derive the key length from your estimates. Showing that 62⁷ comfortably exceeds the number of links you expect demonstrates that your design choices follow from numbers, not habit.
+</Callout>
+
+<KeyTakeaways>
+- A URL shortener maps short keys to long URLs and redirects visitors.
+- Redirect availability and latency matter far more than link creation.
+- Estimates: about 77 writes and 7,700 redirects per second on average, and about 12 billion links (6 TB) over five years.
+- Redirect traffic is small in bytes and highly cacheable.
+- Seven base-62 characters give about 3.5 trillion keys, ample headroom for 12 billion links.
+</KeyTakeaways>

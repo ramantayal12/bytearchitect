@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Data model
+//   users/{uid}                    profile: { displayName, email, createdAt }
+//   users/{uid}/courses/{courseId} progress: { completed, quizzes, bookmarks, lastLessonId, updatedAt }
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function validProfile(data) {
+      return data.keys().hasOnly(['displayName', 'email', 'createdAt'])
+        && data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 60
+        && data.email is string && data.email == request.auth.token.email
+        && data.createdAt is timestamp;
+    }
+
+    function validProgress(data) {
+      return data.keys().hasOnly(['completed', 'quizzes', 'bookmarks', 'lastLessonId', 'updatedAt'])
+        && (!('completed' in data) || (data.completed is map && data.completed.size() <= 1000))
+        && (!('quizzes' in data) || (data.quizzes is map && data.quizzes.size() <= 1000))
+        && (!('bookmarks' in data) || (data.bookmarks is map && data.bookmarks.size() <= 1000))
+        && (!('lastLessonId' in data) || (data.lastLessonId is string && data.lastLessonId.size() <= 200))
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{uid} {
+      // The profile is written at sign-up, before the email is verified.
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && validProfile(request.resource.data);
+      allow delete: if false;
+
+      match /courses/{courseId} {
+        allow read: if isOwner(uid) && isVerified();
+        allow create, update: if isOwner(uid) && isVerified()
+          && courseId.size() <= 64
+          && validProgress(request.resource.data);
+        allow delete: if isOwner(uid) && isVerified();
+      }
+    }
+
+    // Deny everything else.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

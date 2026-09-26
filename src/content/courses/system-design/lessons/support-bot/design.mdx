@@ -1,0 +1,107 @@
+---
+title: Design of a Support Bot with RAG
+---
+
+This lesson designs the support bot around **retrieval-augmented generation**: an ingestion pipeline that turns knowledge into searchable chunks, a retrieval step that finds the best chunks for each question, and an orchestrator that combines retrieval, account tools, guardrails and escalation.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph Ingest["Knowledge ingestion (per tenant)"]
+    KB["Help center, docs, policies"] --> Parse["Parse and clean"] --> Chunk["Chunk with headings"] --> Embed["Embed chunks"]
+    Embed --> VDB[("Vector index, partitioned by tenant")]
+    Chunk --> Lex[("Keyword index")]
+  end
+  Widget["Chat widget"] --> Orch["Conversation orchestrator"]
+  Orch --> Guard["Input guardrails"]
+  Orch --> Ret["Retriever: hybrid search + reranker"]
+  Ret --> VDB
+  Ret --> Lex
+  Orch --> Tools["Account tools: order lookup, receipt resend"]
+  Orch --> LLM["Model gateway / LLM"]
+  Orch --> OutGuard["Output checks: grounding, policy"]
+  Orch --> Handoff["Human handoff"] --> Agents["Agent console"]
+  Orch --> Logs[("Conversations and feedback")]
+```
+
+## Knowledge ingestion
+
+When an article is created or edited, an event triggers ingestion:
+
+1. **Parse** HTML or documents into clean text, keeping headings, lists and tables.
+2. **Chunk** the text into passages of a few hundred tokens along section boundaries, with small overlaps, and prepend the article title and section heading so each chunk makes sense alone.
+3. **Embed** each chunk with an embedding model and store the vector with metadata: tenant ID, article ID, URL, language, product and last-updated time.
+4. **Index** the same chunks in a keyword index for exact terms such as error codes and product names.
+
+Changed articles replace their old chunks, so the bot never retrieves outdated policy text. Updates reach the index within minutes.
+
+## Answering a question
+
+<Slides title="The RAG pipeline for one question">
+<Slide caption="1. Rewrite: combine the new message with recent conversation into a standalone search query.">
+
+```mermaid
+flowchart LR
+  M["Customer: does that apply to sale items?"] --> RW["Rewrite with context: refund policy for sale items"]
+```
+
+</Slide>
+<Slide caption="2. Retrieve: run vector and keyword search restricted to this tenant, merge the results, then rerank the top candidates with a cross-encoder.">
+
+```mermaid
+flowchart LR
+  RW["Query"] --> V["Vector search, tenant filter"]
+  RW --> K["Keyword search, tenant filter"]
+  V --> Merge["Merge"]
+  K --> Merge
+  Merge --> Rerank["Reranker"] --> Top["Top 5 chunks"]
+```
+
+</Slide>
+<Slide caption="3. Generate: the prompt contains instructions, the retrieved chunks marked as untrusted reference material, conversation context and the question. The model answers with citations or says it does not know.">
+
+```mermaid
+flowchart LR
+  Top["Top chunks"] --> P["Prompt"]
+  Hist["Conversation"] --> P
+  P --> LLM["LLM"] --> Ans["Answer with citations"]
+```
+
+</Slide>
+<Slide caption="4. Check: output guardrails verify citations support the claims and policies are followed, then stream the answer or escalate.">
+
+```mermaid
+flowchart LR
+  Ans["Draft answer"] --> G{"Grounded and compliant?"}
+  G -->|yes| Send["Stream to customer"]
+  G -->|no| Esc["Clarify or hand off"]
+```
+
+</Slide>
+</Slides>
+
+**Hybrid search** catches both paraphrased questions (vector search) and exact identifiers (keyword search). The **reranker** is a more accurate model that scores each candidate chunk against the query, sharply improving precision so fewer chunks are needed in the prompt.
+
+## Account tools
+
+For questions like "where is my order?", the orchestrator lets the model call **tools**: narrowly scoped internal APIs such as `get_order_status(order_id)`. The orchestrator executes tool calls with the **customer's own authenticated identity**, never with broad service credentials, so the model cannot access another customer's data even if manipulated. Actions with side effects are limited and may require explicit confirmation from the customer.
+
+## Guardrails and injection defense
+
+- Retrieved documents and customer messages are treated as **data**, clearly delimited in the prompt; instructions inside them are not followed.
+- Input classifiers detect abuse and out-of-scope requests.
+- Output checks verify that cited chunks exist and support the answer, and block disallowed content such as unapproved discounts.
+- Tenant filters are applied inside the retrieval query itself, not after, so another tenant's chunks can never be returned.
+
+## Escalation and learning
+
+The bot escalates when the customer asks for a human, when retrieval confidence is low, after repeated failed attempts or for sensitive topics such as legal threats. The agent receives the transcript and an AI-generated summary. Unresolved questions are clustered to reveal **gaps in the knowledge base**, and resolved conversations with good ratings become evaluation examples for regression testing when prompts, models or retrieval change.
+
+<KeyTakeaways>
+- Ingestion parses, chunks with headings, embeds and indexes knowledge per tenant, replacing chunks when articles change.
+- Retrieval rewrites the query, runs tenant-filtered hybrid search and reranks to pick a few precise chunks.
+- The model answers with citations from delimited, untrusted context, and output checks verify grounding and policy.
+- Tools run with the customer's own identity and narrow scopes, preventing cross-customer data access.
+- Escalation hands off with summaries; unresolved questions reveal knowledge gaps and feed evaluation sets.
+</KeyTakeaways>

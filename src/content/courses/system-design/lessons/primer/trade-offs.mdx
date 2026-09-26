@@ -1,0 +1,77 @@
+---
+title: Distributed Systems Trade-offs
+---
+
+Every design decision trades one good property for another. Interviewers listen for whether you recognize these trade-offs and choose deliberately. This lesson collects the most common ones, each with a rule of thumb and an example from the course.
+
+## Consistency versus availability
+
+During a network partition, a system must either reject some requests to stay consistent or serve possibly stale data to stay available (the CAP theorem). Even without partitions, stronger consistency usually costs latency (PACELC).
+
+- **Choose consistency** for money, inventory and uniqueness: payments, ticket booking, username registration.
+- **Choose availability** for social and content features: likes, feeds, view counts, search results.
+
+## Latency versus throughput
+
+Batching improves throughput but adds waiting time. GPU inference, log ingestion and database writes all batch for efficiency.
+
+- Batch aggressively for background work; keep batches small or dynamic for interactive requests.
+- Example: continuous batching in LLM serving balances both.
+
+## Push versus pull
+
+- **Push** (fan-out on write, server push) makes reads fast but costs work for every write, even if nobody reads.
+- **Pull** (fan-out on read, polling) is cheap until reads are frequent.
+- Example: the hybrid timeline pushes for ordinary users and pulls for celebrities.
+
+## Precompute versus compute on demand
+
+- Precomputation (materialized views, top-k lists, year-in-review summaries) makes reads fast but uses storage and can be stale.
+- On-demand computation is always fresh but slower and more expensive per request.
+- Choose based on read frequency and how fresh results must be.
+
+## Normalization versus denormalization
+
+- Normalized data avoids duplication and anomalies; joins make reads costlier.
+- Denormalized data (a score stored on an answer row, counts on a post) makes reads cheap but requires keeping copies in sync.
+
+## Strong versus weak isolation
+
+- Serializable transactions prevent anomalies but reduce concurrency.
+- Weaker isolation levels are faster but allow anomalies such as lost updates; use them with care, or combine them with explicit constraints and conditional writes.
+
+## Synchronous versus asynchronous
+
+- Synchronous calls are simple and give immediate results, but couple availability: if a dependency is down, so are you.
+- Asynchronous processing through queues decouples components and absorbs bursts, at the cost of eventual consistency and more moving parts.
+
+## Storage versus bandwidth versus compute
+
+- Video renditions trade storage for bandwidth.
+- Compression trades CPU for storage and bandwidth.
+- Caching trades memory for latency and backend load.
+
+```mermaid
+flowchart TB
+  D["Design decision"] --> Q1{"Is correctness critical, as with money or inventory?"}
+  Q1 -->|yes| Strong["Strong consistency, transactions, idempotency"]
+  Q1 -->|no| Q2{"Are reads far more frequent than writes?"}
+  Q2 -->|yes| Pre["Precompute, cache, push"]
+  Q2 -->|no| Lazy["Compute on demand, pull"]
+```
+
+## Simplicity versus flexibility
+
+The simplest design that meets the requirements is usually best. Microservices, multi-region active-active and custom infrastructure add power and complexity. Start simple, as in the Q&A platform's initial design, and evolve when estimates or growth demand it.
+
+<Callout type="interview">
+A strong way to present a trade-off: "We could do A, which gives X but costs Y, or B, which gives Y but costs X. For this product, X matters more because…, so I'll choose A."
+</Callout>
+
+<KeyTakeaways>
+- Choose consistency for money, inventory and uniqueness, and availability for social and content features.
+- Batching trades latency for throughput; push trades write cost for read speed.
+- Precomputation and denormalization speed reads at the cost of storage and staleness.
+- Asynchronous processing decouples and absorbs bursts at the cost of eventual consistency.
+- Start with the simplest design that meets requirements, and justify each trade-off by product needs.
+</KeyTakeaways>

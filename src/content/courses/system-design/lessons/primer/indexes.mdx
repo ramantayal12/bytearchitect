@@ -1,0 +1,60 @@
+---
+title: Database Indexes
+---
+
+An index is an additional data structure that lets a database find rows without scanning the whole table. Choosing the right indexes is often the single biggest performance lever in a data-heavy system, and understanding their costs helps you reason about write-heavy workloads.
+
+## Why indexes matter
+
+Without an index, finding the rows where `email = 'ana@example.com'` in a table of 100 million users means reading every row: a **full table scan**. With an index on `email`, the database follows a small structure directly to the matching row in a handful of steps.
+
+## B-tree indexes
+
+The most common index is the **B-tree** (or B+ tree). It keeps keys sorted in a balanced tree of pages, typically a few kilobytes each. Each internal page points to child pages covering key ranges; leaf pages hold keys and pointers to rows (or the rows themselves).
+
+```mermaid
+flowchart TB
+  Root["Root: separators 100 and 500"] --> L["Keys under 100"]
+  Root --> M["Keys 100 to 499"]
+  Root --> R["Keys 500 and up"]
+  M --> Leaf1["Leaf: 100 ... 250"]
+  M --> Leaf2["Leaf: 251 ... 499"]
+```
+
+Because each page has hundreds of children, a tree only three or four levels deep can index billions of rows. B-trees support equality lookups, **range queries** (`created_at BETWEEN ...`) and ordered scans efficiently.
+
+## LSM-tree indexes
+
+Write-heavy stores often use **log-structured merge trees**. Writes go to an in-memory sorted table and a write-ahead log; when the table fills, it is flushed to disk as an immutable sorted file. Background **compaction** merges files. Reads check the memory table and then files from newest to oldest, using Bloom filters to skip files that cannot contain the key.
+
+| Aspect | B-tree | LSM tree |
+| --- | --- | --- |
+| Writes | In-place page updates, random I/O | Sequential appends, very fast |
+| Reads | Fast, predictable | May check several files; Bloom filters help |
+| Space | Some fragmentation | Temporary duplication until compaction |
+| Typical use | Relational databases | Wide-column and key-value stores |
+
+## Kinds of indexes
+
+- **Primary (clustered) index:** determines how rows are physically ordered; lookups by primary key are fastest.
+- **Secondary index:** an extra structure on another column that points back to the rows.
+- **Composite index:** on several columns, such as (user_id, created_at). It serves queries that filter on a **leftmost prefix** of the columns: user_id alone, or user_id plus a created_at range, but not created_at alone.
+- **Covering index:** includes all columns a query needs, so the database never reads the table rows.
+- **Hash index:** fast equality lookups but no range queries.
+- **Specialized indexes:** inverted indexes for full-text search, spatial indexes (R-trees, geohashes) for location queries and vector indexes for similarity search.
+
+## The costs
+
+Every index must be updated on every insert, update and delete that touches its columns, which slows writes and consumes storage and memory. An index on a low-selectivity column, such as a boolean flag, rarely helps. In distributed databases, **secondary indexes** add another trade-off: a local index per shard means queries by that column must ask every shard (scatter-gather), while a global index partitioned by the indexed value makes reads efficient but writes touch multiple shards, usually updated asynchronously.
+
+<Callout type="interview">
+When you propose a table in an interview, name its key indexes and the queries they serve: "Posts are keyed by post ID, with a secondary index on (author_id, created_at) for profile pages."
+</Callout>
+
+<KeyTakeaways>
+- Indexes avoid full scans by letting the database navigate directly to matching rows.
+- B-trees support equality, range and ordered queries and power most relational databases.
+- LSM trees favor fast sequential writes, with compaction and Bloom filters to keep reads efficient.
+- Composite indexes follow the leftmost-prefix rule; covering indexes avoid reading table rows.
+- Indexes cost write speed and storage; in distributed databases, local versus global secondary indexes trade read efficiency for write cost.
+</KeyTakeaways>

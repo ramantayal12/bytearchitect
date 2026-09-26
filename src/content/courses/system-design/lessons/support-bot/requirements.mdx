@@ -1,0 +1,55 @@
+---
+title: Requirements of a Support Bot
+---
+
+An LLM-powered customer support bot answers customers' questions in a chat widget on a company's website or app. It draws on the company's help center, product documentation and policies, and it can look up the customer's own account information, such as order status. When it cannot help, it hands the conversation to a human agent. Done well, it resolves a large share of questions instantly; done badly, it confidently invents refund policies that do not exist.
+
+## Functional requirements
+
+- **Answer questions** in natural language using the company's knowledge base, with links to the sources used.
+- **Account-aware actions:** with the customer's authentication, look up orders, subscriptions or tickets through internal APIs, and perform a limited set of actions such as resending a receipt.
+- **Escalation:** hand off to a human agent with the full conversation and a summary, when the customer asks, when the bot is not confident or for sensitive topics.
+- **Multi-turn conversations** that remember context within a session.
+- **Multi-tenant (optional):** as a product, serve many companies, each with its own knowledge base and configuration.
+- **Knowledge updates:** new or edited articles become available to the bot within minutes.
+- **Analytics:** resolution rate, escalation rate, customer satisfaction and gaps in the knowledge base.
+
+## Non-functional requirements
+
+- **Accuracy and grounding:** answers must be based on the company's content, not the model's general knowledge. Unsupported claims about policies, prices or legal terms are unacceptable.
+- **Safety:** resist prompt injection and abuse; never reveal other customers' data; follow tone and compliance rules.
+- **Latency:** first tokens within about one to two seconds, streamed.
+- **Availability:** if the bot fails, customers must still reach humans.
+- **Tenant isolation:** one company's documents and conversations must never appear in another's answers.
+- **Cost:** a support conversation should cost far less than a human-handled ticket.
+
+## Capacity estimation
+
+Consider a support platform serving 1,000 companies:
+
+| Assumption | Value |
+| --- | --- |
+| Conversations per day (all tenants) | 5 million |
+| Messages per conversation | 6 (3 customer, 3 bot) |
+| Knowledge base per tenant | 5,000 articles, about 1,000 words each |
+| Retrieved context per answer | 5 chunks of about 300 tokens |
+| Prompt size per answer | about 3,000 tokens |
+| Output per answer | about 200 tokens |
+
+**Bot answers:** 5 million × 3 = 15 million per day, about 175 per second on average, maybe 500 per second at peak.
+
+**Tokens:** input about 15 million × 3,000 = 45 billion per day; output 15 million × 200 = 3 billion per day. The input side dominates, so prompt size, caching and retrieval precision directly drive cost.
+
+**Knowledge index:** 1,000 tenants × 5,000 articles × 1,000 words is 5 billion words, or about 7 billion tokens. Split into chunks of 300 tokens, that is about 23 million chunks. With 1,024-dimensional float embeddings (4 KB each), the vector index holds about 95 GB of vectors, plus metadata, which a sharded vector database handles comfortably.
+
+<Callout type="note">
+The numbers show that retrieval quality and prompt size matter more than raw model throughput. Sending fewer, better chunks improves accuracy and cuts the dominant input-token cost at the same time.
+</Callout>
+
+<KeyTakeaways>
+- A support bot answers from the company's knowledge base, performs limited account actions and escalates to humans.
+- Grounded, accurate answers and safety matter more than creativity.
+- Tenant isolation, availability of human fallback and low cost per conversation are key constraints.
+- Input tokens dominate cost, so retrieval precision and prompt size are central design levers.
+- The vector index for millions of chunks is on the order of a hundred gigabytes, suited to a sharded vector database.
+</KeyTakeaways>

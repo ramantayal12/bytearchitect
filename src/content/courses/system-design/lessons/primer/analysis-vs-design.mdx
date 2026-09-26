@@ -1,0 +1,67 @@
+---
+title: System Analysis versus System Design
+---
+
+"System analysis" and "system design" are often mentioned together, and some job descriptions and interviews use one term when they mean the other. They are related but distinct activities. Understanding the difference helps you recognize what an interviewer or project is really asking for.
+
+## System analysis: understanding the problem
+
+System analysis studies an existing situation or a proposed need to understand **what** a system must do. It focuses on the problem, not the solution. Typical activities include:
+
+- Interviewing stakeholders and users to gather requirements.
+- Studying current processes and systems, and their shortcomings.
+- Modeling data, workflows and business rules.
+- Identifying constraints, such as regulations, budgets, timelines and existing infrastructure.
+- Assessing feasibility: technical, economic and operational.
+- Producing a requirements specification that everyone agrees on.
+
+The output answers questions like "Which problems are we solving? For whom? What must be true for this to succeed?"
+
+## System design: shaping the solution
+
+System design takes the requirements and decides **how** the system will meet them. It focuses on the solution:
+
+- Choosing an architecture and its components.
+- Defining interfaces, APIs and data models.
+- Selecting technologies and storage.
+- Planning for scalability, availability, security and cost.
+- Evaluating trade-offs and failure modes.
+- Producing architecture diagrams and design documents that engineers implement.
+
+```mermaid
+flowchart LR
+  Need["Business need"] --> Analysis["System analysis: what and why"]
+  Analysis --> Req["Requirements specification"]
+  Req --> Design["System design: how"]
+  Design --> Build["Implementation"]
+  Build --> Feedback["Feedback from use"] -.-> Analysis
+```
+
+## Comparing them
+
+| Aspect | System analysis | System design |
+| --- | --- | --- |
+| Central question | What is needed and why? | How will we build it? |
+| Focus | Problem domain, users, processes | Architecture, components, technologies |
+| Key outputs | Requirements, process and data models, feasibility | Architecture, APIs, data models, design documents |
+| Typical roles | Business or systems analysts, product managers | Architects, senior engineers |
+| Success measure | The right problem is understood | The solution meets requirements within constraints |
+
+## Where they meet in interviews
+
+A system design interview contains a small amount of analysis at the start. The **Scope** step of SCALED is analysis: clarifying users, features and constraints. The rest is design. Candidates who skip the analysis step often design an impressive system for the wrong problem.
+
+In real projects, the two alternate. Designing reveals new questions (can we accept eventual consistency here?), which send you back to analysis (what does the business actually need?). Mature teams treat requirements and designs as living documents that evolve together.
+
+## Practical takeaways
+
+- Start every design with enough analysis to know what matters and what does not.
+- Separate facts (requirements, constraints) from choices (architecture, technology) in documents and discussions.
+- When a design debate stalls, it is often because the requirements are unclear; return to analysis.
+
+<KeyTakeaways>
+- System analysis determines what a system must do and why; system design determines how it will do it.
+- Analysis produces requirements, models and feasibility assessments; design produces architecture, interfaces and design documents.
+- In interviews, the Scope step is analysis, and the remaining SCALED steps are design.
+- In practice the two alternate, and unclear requirements are a common cause of stalled design debates.
+</KeyTakeaways>

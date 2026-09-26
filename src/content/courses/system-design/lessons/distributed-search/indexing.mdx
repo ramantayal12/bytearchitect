@@ -1,0 +1,90 @@
+---
+title: Indexing in Distributed Search
+---
+
+The heart of every search engine is the **inverted index**: a mapping from each term to the list of documents that contain it. It turns “which documents contain this word?” from a full scan into a fast lookup.
+
+## Forward versus inverted index
+
+A **forward index** maps documents to their terms — the natural way data is stored. An **inverted index** flips the mapping.
+
+| Document | Text |
+| --- | --- |
+| D1 | wireless noise cancelling headphones |
+| D2 | wired headphones with microphone |
+| D3 | wireless charging pad |
+
+| Term | Postings list |
+| --- | --- |
+| wireless | D1, D3 |
+| headphones | D1, D2 |
+| wired | D2 |
+| charging | D3 |
+| noise | D1 |
+
+A query for `wireless headphones` looks up both postings lists and **intersects** them: `{D1, D3} ∩ {D1, D2} = {D1}`. Because postings lists are sorted by document ID, intersection is a fast linear merge.
+
+## Building the index: text analysis
+
+Before indexing, text passes through an **analysis pipeline** so that queries match documents regardless of superficial differences:
+
+<Slides title="Text analysis pipeline">
+<Slide caption="1. Tokenization splits text into terms.">
+
+```mermaid
+flowchart LR
+  T["Wireless, Noise-Cancelling Headphones!"] --> K["Wireless | Noise | Cancelling | Headphones"]
+```
+
+</Slide>
+<Slide caption="2. Normalization lowercases terms and removes punctuation and accents.">
+
+```mermaid
+flowchart LR
+  K["Wireless | Noise | Cancelling | Headphones"] --> N["wireless | noise | cancelling | headphones"]
+```
+
+</Slide>
+<Slide caption="3. Stemming reduces words to a common root; stop words may be removed.">
+
+```mermaid
+flowchart LR
+  N["wireless | noise | cancelling | headphones"] --> S["wireless | nois | cancel | headphon"]
+```
+
+</Slide>
+</Slides>
+
+The **same analysis** must be applied to queries, so a search for “cancelled headphone” also matches. Other steps include synonym expansion (“earbuds” ↔ “headphones”) and language-specific processing.
+
+## What postings contain
+
+Postings lists can store more than document IDs:
+
+- **Term frequency** — how many times the term appears in the document, used for ranking.
+- **Positions** — where in the document the term appears, enabling phrase queries (“noise cancelling”) and proximity scoring.
+- **Field information** — whether the term appears in the title or body, since title matches are usually more relevant.
+
+These lists are heavily **compressed** (for example, storing gaps between sorted IDs with variable-length encoding) so that more of the index fits in memory.
+
+## Ranking basics
+
+A classic relevance score combines:
+
+- **Term frequency (TF):** documents mentioning a term more often are more relevant.
+- **Inverse document frequency (IDF):** rare terms (“anechoic”) are more informative than common ones (“the”).
+- **Length normalization:** a match in a short title counts more than one in a long transcript.
+
+Scoring functions such as BM25 formalize this. Production systems then combine text relevance with signals like popularity, freshness and personalization, often using machine-learned ranking models on the top candidates.
+
+## Updating the index
+
+Inverted indexes are expensive to modify in place, so systems write new documents into small **immutable segments** and periodically **merge** segments in the background. Deletions are recorded as tombstones and physically removed during merges. New segments are made searchable every second or so, which provides near-real-time freshness.
+
+<KeyTakeaways>
+- An inverted index maps each term to a sorted postings list of documents containing it.
+- Queries intersect or union postings lists, which is fast because lists are sorted.
+- Text analysis — tokenization, normalization, stemming, synonyms — must be applied identically to documents and queries.
+- Postings store frequencies, positions and fields, compressed to fit in memory.
+- Ranking combines TF-IDF-style relevance with quality signals; updates use immutable segments and merges.
+</KeyTakeaways>

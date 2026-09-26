@@ -1,0 +1,140 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.21 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0 0);
+  --primary: oklch(0.51 0.23 277);
+  --primary-foreground: oklch(0.98 0.01 277);
+  --secondary: oklch(0.965 0 0);
+  --secondary-foreground: oklch(0.21 0 0);
+  --muted: oklch(0.965 0 0);
+  --muted-foreground: oklch(0.55 0 0);
+  --accent: oklch(0.955 0 0);
+  --accent-foreground: oklch(0.21 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.6 0.15 155);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.51 0.23 277);
+  --sidebar: oklch(0.985 0 0);
+}
+
+/* Neutral charcoal dark theme (Educative-like); only primary/ring keep the indigo hue. */
+.dark {
+  --background: oklch(0.22 0 0);
+  --foreground: oklch(0.96 0 0);
+  --card: oklch(0.255 0 0);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: oklch(0.255 0 0);
+  --popover-foreground: oklch(0.96 0 0);
+  --primary: oklch(0.68 0.17 277);
+  --primary-foreground: oklch(0.16 0.03 277);
+  --secondary: oklch(0.285 0 0);
+  --secondary-foreground: oklch(0.96 0 0);
+  --muted: oklch(0.285 0 0);
+  --muted-foreground: oklch(0.72 0 0);
+  --accent: oklch(0.3 0 0);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.72 0.15 155);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.68 0.17 277);
+  --sidebar: oklch(0.195 0 0);
+}
+
+@theme inline {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply scroll-smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/*
+ * Lesson heading scale: larger, bolder top-level headings than `prose-lg`.
+ * `> h2` outranks the typography plugin's zero-specificity `:where()` selectors, and only
+ * matches headings written in the lesson markdown, not ones inside widgets.
+ */
+@utility lesson-prose {
+  & > h2 {
+    @apply mt-14 mb-5 text-[2rem] leading-tight font-bold tracking-tight;
+  }
+  & > h3 {
+    @apply mt-10 mb-4 text-[1.625rem] leading-snug font-bold tracking-tight;
+  }
+  & > :is(h2, h3) {
+    scroll-margin-top: 6rem;
+  }
+  & > :is(h2, h3):first-child {
+    margin-top: 0;
+  }
+}
+
+/* Code blocks highlighted at build time by rehype-pretty-code (dual theme). */
+@layer components {
+  .prose figure[data-rehype-pretty-code-figure] pre {
+    @apply rounded-lg border bg-muted/50 px-0 py-3 text-sm;
+  }
+  .prose figure[data-rehype-pretty-code-figure] pre > code {
+    @apply grid;
+  }
+  .prose figure[data-rehype-pretty-code-figure] [data-line] {
+    @apply px-4;
+  }
+  [data-rehype-pretty-code-figure] code span {
+    color: var(--shiki-light);
+  }
+  .dark [data-rehype-pretty-code-figure] code span {
+    color: var(--shiki-dark);
+  }
+  .prose :not(pre) > code {
+    @apply rounded bg-muted px-1.5 py-0.5 font-normal before:content-none after:content-none;
+  }
+  .mermaid-svg svg {
+    @apply mx-auto h-auto max-w-full;
+  }
+}

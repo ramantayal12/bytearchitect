@@ -1,0 +1,58 @@
+---
+title: How This Course Is Organized
+---
+
+This course is designed to be read in order, but it is also a reference you can return to. Understanding its structure will help you decide where to spend your time.
+
+## The five parts
+
+```mermaid
+flowchart TB
+  P1["Part I · Foundations"] --> P2["Part II · Building Blocks"]
+  P2 --> P3["Part III · Design Problems"]
+  P3 --> P4["Part IV · AI-Era System Design"]
+  P3 --> P5["Part V · Failures & Wrap-Up"]
+  P4 --> P5
+```
+
+### Part I — Foundations
+
+The first part sets the stage. You will learn how system design interviews are run and evaluated, and you will meet the **SCALED** framework used throughout the course. We then cover the conceptual toolkit you need before touching any component: abstractions such as remote procedure calls, the spectrum of consistency models, the kinds of failures distributed systems experience, and the non-functional characteristics — availability, reliability, scalability, maintainability and fault tolerance — by which every design is judged. Finally, you will practice back-of-the-envelope estimation.
+
+### Part II — Building Blocks
+
+Large systems are assembled from a surprisingly small set of reusable components. Each chapter in this part designs one building block from scratch: the **domain name system**, **load balancers**, **databases**, **key-value stores**, **content delivery networks**, **unique ID generators**, **monitoring systems**, **distributed caches**, **messaging queues**, **publish-subscribe systems**, **rate limiters**, **blob stores**, **distributed search**, **distributed logging**, **task schedulers** and **sharded counters**.
+
+Designing the building blocks themselves means you will understand not just *what* they do but *how* they behave under load and failure — knowledge you will lean on in every design problem.
+
+### Part III — Design Problems
+
+Here you apply everything to complete products: a video platform, a question-and-answer site, a maps service, a proximity service, ride-hailing, microblogging, a newsfeed, photo sharing, a URL shortener, a web crawler, a messaging app, typeahead suggestions, collaborative editing, a code deployment system, a payment system, an online judge and several shorter case studies. Each design follows the same structure, so by the end the process becomes second nature.
+
+### Part IV — AI-Era System Design
+
+Modern products increasingly embed machine learning and large language models. This part covers how AI has changed system design and interviews, and walks through designs for an LLM chat service, data infrastructure for machine learning, a customer-support bot that uses retrieval-augmented generation, and an AI code assistant.
+
+### Part V — Failures and Wrap-Up
+
+We finish by studying real public outages and what they teach about designing for failure, then summarize the course. An appendix collects primer lessons on patterns and trade-offs that are ideal for quick revision.
+
+## Lesson anatomy
+
+Most lessons follow the same shape: a motivating problem, the core ideas with diagrams, trade-offs and variations, then **key takeaways** and a short quiz. Design problems are split across several lessons — requirements, high-level design, detailed design and evaluation — mirroring how you would present them in an interview.
+
+<Callout type="tip" title="Suggested paths">
+**Short on time?** Read Part I, the building blocks you are least familiar with, and at least six design problems.
+**Thorough preparation?** Go front to back and retake chapter quizzes until you score at least 80%.
+</Callout>
+
+## Tracking your progress
+
+The sidebar shows every chapter with a completion count. Mark lessons complete as you finish them; your best quiz scores are stored with your account. Chapter quizzes are marked complete as soon as you submit them, so you can always see which topics still need review.
+
+<KeyTakeaways>
+- The course has five parts: foundations, building blocks, design problems, AI-era systems, and failures and wrap-up.
+- Building blocks are designed from scratch so you understand their behavior, not just their purpose.
+- Design problems share a consistent structure based on the SCALED framework.
+- Use the sidebar and quizzes to track progress and identify topics that need review.
+</KeyTakeaways>

@@ -1,0 +1,70 @@
+---
+title: Reliability
+---
+
+**Reliability** is the probability that a system performs its intended function correctly, without failure, over a given period. Availability asks, “Is the system up right now?” Reliability asks, “Will it keep working correctly, and how often does it fail?”
+
+## Availability versus reliability
+
+The two are related but not identical:
+
+- A system that crashes for one second every minute may achieve high availability if it restarts instantly, yet it is **unreliable** — users constantly hit errors.
+- A system that runs flawlessly for a year but then is down for a week is **reliable** for long periods but has poor availability for that year.
+- A system can also be up and responding yet **incorrect** — returning wrong balances, for example. It is available but not reliable.
+
+Reliability therefore includes correctness, not just responsiveness.
+
+## Measuring reliability
+
+Two classic metrics describe reliability:
+
+- **Mean time between failures (MTBF):** the average operating time between failures. Higher is better.
+- **Mean time to repair (MTTR):** the average time to detect and recover from a failure. Lower is better.
+
+```mermaid
+flowchart LR
+  U1["Up<br/>(MTBF)"] --> F1["Failure"] --> R1["Repair<br/>(MTTR)"] --> U2["Up<br/>(MTBF)"] --> F2["Failure"]
+```
+
+They connect to availability through a simple formula:
+
+```text
+availability = MTBF / (MTBF + MTTR)
+```
+
+This reveals two ways to improve availability: fail less often (increase MTBF) or recover faster (decrease MTTR). In large distributed systems, component failures are so frequent that **reducing MTTR** — through automation, good monitoring and fast rollbacks — is often the more practical lever.
+
+<Callout type="tip">
+Many teams also track **mean time to detect (MTTD)**. You cannot repair what you have not noticed; strong monitoring and alerting shorten the whole recovery cycle.
+</Callout>
+
+## Sources of unreliability
+
+Failures come from many directions:
+
+- **Hardware faults** — disks, memory and network cards fail. At scale, some hardware is always failing.
+- **Software bugs** — especially in rarely exercised code paths such as error handling and failover logic.
+- **Human error** — misconfigurations and mistaken commands cause a large share of real outages.
+- **Overload** — sudden traffic spikes, retry storms and resource exhaustion.
+- **Dependencies** — third-party services and shared infrastructure can fail and drag your system down.
+
+## Building reliable systems
+
+- **Redundancy and replication** so that hardware faults do not lose data or service.
+- **Testing failure paths** — chaos engineering deliberately injects failures to verify that recovery mechanisms work.
+- **Defensive design** — timeouts, retries with backoff, bulkheads that isolate resources, and circuit breakers.
+- **Data integrity checks** — checksums and validation catch corruption before it spreads.
+- **Automation and guardrails** — reviewed configuration changes, gradual rollouts and automatic rollbacks reduce human error.
+- **Blameless post-mortems** — learning from every incident so the same failure does not recur.
+
+## Reliability in interviews
+
+When discussing reliability, go beyond “add replicas.” Explain *what* can fail, *how* you would detect it and *how* the system recovers. For example: “If a storage node dies, the coordinator detects missed heartbeats within ten seconds and re-replicates its data from the remaining copies, so we maintain three replicas.”
+
+<KeyTakeaways>
+- Reliability is the probability of correct operation over time; it includes correctness, not just uptime.
+- MTBF measures how often failures occur; MTTR measures how quickly you recover.
+- availability = MTBF / (MTBF + MTTR), so faster recovery improves availability.
+- Failures come from hardware, software, humans, overload and dependencies.
+- Reliable systems combine redundancy, failure testing, defensive design and learning from incidents.
+</KeyTakeaways>

@@ -1,0 +1,61 @@
+---
+title: Requirements of a Proximity Service
+---
+
+This lesson scopes the proximity service and estimates its scale.
+
+## Functional requirements
+
+- **Search nearby:** given a location and a radius (or the visible map area), return businesses sorted by relevance, with optional filters for category, rating, price and "open now".
+- **View a business:** show details such as name, address, hours, photos and reviews.
+- **Manage businesses:** owners add, update or delete their business. Changes do not need to appear in search instantly.
+- **Reviews:** users write reviews and rate businesses.
+
+Out of scope: reservations, ordering, advertising and messaging between users and businesses.
+
+## Non-functional requirements
+
+- **Low latency:** nearby searches should return within about 100 to 200 milliseconds.
+- **High availability:** search should keep working during partial failures and traffic peaks, such as lunchtime or weekend evenings.
+- **Scalability:** the service should handle a growing number of businesses and users worldwide.
+- **Eventual consistency** is acceptable for business updates and review aggregates. A new business may appear in search after a short delay, perhaps minutes.
+- **Privacy:** users' locations should not be stored beyond what is needed to answer the query.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Businesses | 200 million |
+| Daily active users | 100 million |
+| Nearby searches per user per day | 5 |
+| Business record size | about 1 KB (excluding photos) |
+| Business updates per day | 1 percent of businesses |
+
+**Search QPS:** 100 million × 5 = 500 million searches per day, about 5,800 per second on average and perhaps 15,000 to 20,000 per second at peak.
+
+**Write QPS:** 1 percent of 200 million is 2 million updates per day, about 23 per second. The workload is overwhelmingly read-heavy.
+
+**Business data:** 200 million × 1 KB = 200 GB, easily handled by a sharded database with replicas.
+
+**Spatial index size:** the index only needs, for each business, its ID and location, about 8 bytes for the ID and 16 bytes for two coordinates, plus the index structure. That is roughly 200 million × 24 bytes = 4.8 GB, plus overhead. Even with generous overhead, the whole world's index fits in the memory of one modern server.
+
+<Callout type="note">
+This is the most important estimate in the chapter. Because the spatial index fits in memory, we do not need to shard it. We can replicate the entire index on many read servers and scale reads simply by adding replicas.
+</Callout>
+
+## Server estimation
+
+If one location-service server with an in-memory index handles about 2,000 queries per second, a peak of 20,000 queries per second requires about 10 servers. We deploy a few more for redundancy and spread them across regions so users query a nearby replica. The business service handles detail-page reads, which are cacheable, and a small volume of writes.
+
+## Constraints on search results
+
+- Return at most a page of results, such as 20, with pagination for more.
+- If the radius contains too few results, the client can widen it, or the service can expand the search automatically.
+- Ranking combines distance with relevance signals such as rating, number of reviews and whether the business is open.
+
+<KeyTakeaways>
+- Core features are nearby search with filters, business details, business management and reviews.
+- The workload is overwhelmingly read-heavy: thousands of searches per second versus dozens of updates.
+- Eventual consistency is fine for business updates, which may take minutes to appear in search.
+- The spatial index for 200 million businesses is only a few gigabytes, so it fits in memory and can be fully replicated rather than sharded.
+</KeyTakeaways>

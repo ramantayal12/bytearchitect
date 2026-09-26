@@ -1,0 +1,60 @@
+---
+title: Requirements of an LLM Chat Service
+---
+
+A conversational LLM service lets users chat with an AI assistant in a web or mobile app. Users type a message, and the assistant's reply streams back word by word. Conversations persist, so users can return to them later. Behind this simple interface lies one of the most resource-intensive services on the internet: every reply requires billions of floating-point operations on specialized accelerators.
+
+## Functional requirements
+
+- **Chat:** send a message and receive a streamed response that takes the conversation history into account.
+- **Conversations:** create, list, rename and delete conversations; resume any conversation later.
+- **Attachments:** upload documents or images for the assistant to consider (a simplified version).
+- **Regenerate and stop:** regenerate a response or stop generation mid-stream.
+- **Feedback:** thumbs up or down on responses, used for quality evaluation.
+- **Tiers:** free and paid plans with different models, limits and priority.
+
+Out of scope: voice mode, image generation, third-party tool plugins and model training.
+
+## Non-functional requirements
+
+- **Low time to first token:** ideally under a second, so the assistant feels responsive.
+- **Smooth streaming:** a steady generation rate faster than people read, for example at least 20 to 50 tokens per second per response.
+- **High availability:** users rely on the assistant for work; outages are highly visible.
+- **Cost efficiency:** GPU time is the dominant cost; the design must maximize useful tokens per GPU-second.
+- **Safety:** filter harmful requests and outputs, and protect user data.
+- **Fairness under load:** when capacity is short, paid users get priority and free users get graceful degradation rather than errors.
+- **Privacy:** conversations are private to their owner, encrypted at rest, and deletable.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 100 million |
+| Messages per user per day | 10 |
+| Average input tokens per request (history + message) | 2,000 |
+| Average output tokens per response | 400 |
+| Peak-to-average ratio | 3 |
+
+**Requests:** 100 million × 10 = 1 billion messages per day, about 11,600 per second on average and 35,000 per second at peak.
+
+**Output tokens:** 1 billion × 400 = 400 billion per day, about 4.6 million tokens per second on average and roughly 14 million per second at peak.
+
+**Input tokens:** 1 billion × 2,000 = 2 trillion per day. Prefill is more efficient per token than decode, but at this volume it is still substantial, and caching shared prefixes, such as the system prompt and earlier turns, saves a lot.
+
+**GPU fleet:** if one inference server with several accelerators generates about 5,000 output tokens per second with efficient batching, peak demand requires about 14 million ÷ 5,000 = 2,800 servers, plus capacity for prefill, redundancy and multiple models. This is why every percentage point of efficiency matters.
+
+**Storage:** each message averages perhaps 2 KB of text with metadata. 1 billion messages × 2 × 2 KB (user and assistant) is about 4 TB per day, roughly 1.5 PB per year. Conversation text is cheap compared with compute, but it must be stored durably and indexed per user.
+
+**Connections:** each streaming response holds an open connection for 10 to 30 seconds. At 35,000 new responses per second, that means several hundred thousand to a million concurrent streams at peak.
+
+<Callout type="note">
+The estimates show that compute, not storage or bandwidth, dominates. Design decisions such as batching, caching, model routing and limits on context length are really decisions about GPU cost.
+</Callout>
+
+<KeyTakeaways>
+- Core features are streamed chat with history, conversation management, attachments, regeneration and feedback, across tiers.
+- Key non-functional goals are fast time to first token, smooth streaming, availability, safety, privacy and cost efficiency.
+- Estimates reach about 14 million output tokens per second at peak, requiring thousands of GPU servers.
+- Input tokens from history are large; caching shared prefixes saves significant compute.
+- Compute dominates cost, so efficiency techniques are central to the design.
+</KeyTakeaways>

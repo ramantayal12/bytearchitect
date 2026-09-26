@@ -1,0 +1,59 @@
+---
+title: Requirements of a Maps Service
+---
+
+This lesson defines what the maps service must do and estimates how much load it must carry.
+
+## Functional requirements
+
+- **View the map:** users pan and zoom a map of the world on web and mobile.
+- **Find places:** users search for addresses and points of interest, and see where they are on the map.
+- **Get directions:** given a start and destination, the service returns one or more routes for driving, walking or cycling, with distance and estimated time of arrival (ETA).
+- **Navigate:** during a trip the app gives turn-by-turn directions, tracks the user's position and reroutes if they leave the route or if a faster route appears.
+- **Live traffic:** routes and ETAs account for current traffic conditions.
+
+Out of scope: public transit schedules, street-level imagery, offline map downloads, reviews and business listings management.
+
+## Non-functional requirements
+
+- **Low latency:** tiles should appear within a couple of hundred milliseconds; a route should be returned in about a second; rerouting during navigation should feel immediate.
+- **High availability:** navigation is often used while driving, so the service must be dependable. The client should keep guiding the user along the current route even if the network drops.
+- **Accuracy:** ETAs should be close to actual travel times, and routes should respect turn restrictions and one-way streets.
+- **Scalability:** the system must handle hundreds of millions of daily users and rush-hour peaks.
+- **Freshness:** traffic data should reflect conditions within a few minutes; road network changes can take hours or days.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 1 billion |
+| Route requests per active user per day | 2 |
+| Concurrent navigating devices at peak | 50 million |
+| Location ping interval while navigating | every 5 seconds |
+| Tile requests per session | 100, mostly served by CDN |
+| Road graph size | about 500 million nodes and 1 billion edges |
+
+**Route requests:** 1 billion × 2 = 2 billion per day, about 23,000 per second on average and perhaps 70,000 per second at rush-hour peaks. Navigation adds reroute requests on top.
+
+**Location pings:** 50 million devices ÷ 5 seconds = 10 million pings per second at peak. Each ping is small, around 100 bytes with position, speed, heading and timestamp, so this is about 1 GB per second of ingest, or roughly 8 Gbps. Pings are batched on the device to cut request overhead.
+
+**Tiles:** 1 billion users × 100 tiles = 100 billion tile requests per day, over a million per second. Almost all are served from CDN caches because popular areas are requested repeatedly.
+
+**Map data storage:** the road graph with attributes is on the order of a few hundred gigabytes. Vector tiles for all zoom levels are tens of terabytes. Satellite imagery, if included, is petabytes.
+
+**Traffic history:** storing aggregated speeds per road segment every few minutes for a billion edges produces large but manageable volumes. Historical data powers ETA predictions for future departure times.
+
+<Callout type="note">
+The estimates show three very different workloads: a massive, cacheable read workload for tiles; a CPU-intensive, latency-sensitive workload for routing; and a write-heavy streaming workload for location pings. Each gets its own design.
+</Callout>
+
+## Server estimation
+
+If one routing server with an in-memory, preprocessed graph answers about 500 queries per second, the 70,000-per-second peak needs about 140 servers, plus redundancy. Each routing server must hold the preprocessed graph for its region in memory, which drives the choice of large-memory machines and regional partitioning. Ingesting 10 million pings per second requires a partitioned streaming platform with hundreds of partitions.
+
+<KeyTakeaways>
+- Core features are map viewing, place search, directions, turn-by-turn navigation and live traffic.
+- Latency, availability and ETA accuracy are the most important non-functional requirements.
+- Tiles are a huge but cacheable read load; routing is CPU- and memory-intensive; location pings are a heavy streaming write load.
+- Estimates suggest tens of thousands of route requests and around 10 million location pings per second at peak.
+</KeyTakeaways>

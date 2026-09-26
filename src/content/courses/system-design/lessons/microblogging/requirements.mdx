@@ -1,0 +1,66 @@
+---
+title: Requirements of a Microblogging Service
+---
+
+This lesson defines the scope and capacity of the microblogging service.
+
+## Functional requirements
+
+- **Post:** users publish short text posts, up to a few hundred characters, optionally with images or video.
+- **Follow:** users follow and unfollow other accounts. The relationship is one-directional.
+- **Home timeline:** users see recent posts from accounts they follow, newest first or ranked.
+- **User timeline:** anyone can view a user's own posts.
+- **Engage:** users like, reply to and repost posts, and see counts.
+- **Search:** users search recent posts by keyword and hashtag.
+- **Trends:** users see topics that are trending now, globally or by region.
+- **Notifications:** users are told about replies, mentions and new followers.
+
+Out of scope: direct messages, advertising, content moderation pipelines and account verification.
+
+## Non-functional requirements
+
+- **Availability:** the service should stay up during global events, which are exactly when traffic spikes. We favor availability over consistency.
+- **Low latency:** the home timeline should load in a couple of hundred milliseconds.
+- **Eventual consistency:** a follower may see a new post a few seconds after it is published. Like counts may lag.
+- **Scalability:** handle bursts of several times average write traffic.
+- **Durability:** posts are never lost once acknowledged.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 250 million |
+| Posts per user per day (average) | 2 |
+| Timeline views per user per day | 20 |
+| Average followers per user | 200 |
+| Accounts with over 1 million followers | tens of thousands |
+| Average post size (text and metadata) | 1 KB |
+| Share of posts with media | 20 percent, averaging 500 KB |
+
+**Write traffic:** 250 million × 2 = 500 million posts per day, about 5,800 per second on average. During major events this can burst to 30,000 per second or more.
+
+**Read traffic:** 250 million × 20 = 5 billion timeline views per day, about 58,000 per second on average and perhaps 150,000 per second at peak. The read-to-write ratio is about 10:1 for requests, but each timeline view returns dozens of posts, so post reads outnumber post writes by several hundred to one.
+
+**Fan-out writes (if pushing to everyone):** 500 million posts × 200 followers = 100 billion timeline inserts per day, over a million per second. This is manageable for ordinary accounts, especially if timelines store only post IDs, but celebrity posts would create sudden spikes of tens of millions of inserts each, which is why they are excluded from push.
+
+**Storage:**
+
+- Text posts: 500 million × 1 KB = 500 GB per day, around 180 TB per year.
+- Media: 100 million × 500 KB = 50 TB per day, which belongs in a blob store behind a CDN.
+- Timelines: if each cached timeline holds the latest 800 post IDs at 8 bytes each, that is about 6.4 KB per user; for 250 million active users, around 1.6 TB, which fits in a distributed in-memory cache.
+
+<Callout type="note">
+Storing only post IDs in timelines is what makes push fan-out affordable. The post content is stored once and hydrated at read time from a post cache.
+</Callout>
+
+## Bandwidth
+
+Each timeline view returns perhaps 20 posts of about 1 KB of text and metadata, so about 20 KB per view without media, or 3 GB per second at peak. Media is served by the CDN and dominates total bandwidth.
+
+<KeyTakeaways>
+- Core features are posting, following, home and user timelines, engagement, search, trends and notifications.
+- Availability and low latency matter more than strict consistency; posts may take seconds to reach followers.
+- Reads of posts outnumber writes by hundreds to one, and writes can burst several-fold during events.
+- Pushing post IDs to every follower costs around a million inserts per second, affordable except for celebrity accounts.
+- Timelines of post IDs for all active users fit in a distributed in-memory cache.
+</KeyTakeaways>

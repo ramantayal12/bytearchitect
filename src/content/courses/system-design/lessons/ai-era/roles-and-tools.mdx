@@ -1,0 +1,53 @@
+---
+title: How Roles and Tools Changed the Interview
+---
+
+AI has changed both what engineers build and how they build it. Coding assistants write boilerplate, explain unfamiliar code and draft designs. Teams have created new roles around models and data. System design interviews have evolved accordingly: some companies now ask AI-specific design questions, and many expect candidates to reason about AI components even in classic problems.
+
+## Changing roles
+
+- **Software engineers** increasingly integrate model APIs, design retrieval pipelines and build evaluation harnesses, alongside traditional services.
+- **ML and AI engineers** focus on model selection, fine-tuning, prompt design, inference optimization and quality measurement.
+- **Platform engineers** run GPU clusters, model gateways and shared inference services with quotas and cost controls.
+- **Data engineers** build pipelines that collect, clean, label and version the data used for training, evaluation and retrieval.
+
+The boundaries blur. A product engineer designing a support bot now needs to understand embeddings, context windows and evaluation, just as they once needed to understand caching and databases.
+
+## How the interview changed
+
+**New question types.** Alongside "design a URL shortener," you may be asked to design a chat assistant, a retrieval-augmented support bot, a code completion service or an ML data platform. These questions test the same skills (requirements, estimates, architecture, trade-offs) applied to AI components.
+
+**AI inside classic problems.** Interviewers may ask how you would add semantic search to a Q&A site, summarize long threads in a messaging app or detect fraud with a model in a payment system. The model is one component; the surrounding system still needs queues, caches, storage and failure handling.
+
+**Emphasis on judgment over recall.** With AI tools able to recite standard architectures, interviews reward reasoning: why this trade-off, what breaks first, how you would measure success, what it costs.
+
+## What interviewers look for in AI design questions
+
+| Area | Strong signals |
+| --- | --- |
+| Requirements | Clarifying quality targets, latency (time to first token), safety and privacy constraints |
+| Estimation | Tokens per request, GPU throughput, cost per request and per user |
+| Architecture | Model gateway, retrieval pipeline, streaming, caching, fallbacks |
+| Quality | Offline evaluation sets, online feedback, A/B testing, regression detection |
+| Safety | Input and output filtering, prompt injection defenses, data isolation between tenants |
+| Cost | Routing to smaller models, caching, batching, limiting context length |
+
+## Using AI tools well as an engineer
+
+AI assistants are now normal parts of engineering workflows. Using them well means:
+
+- **Staying accountable** for correctness: reviewing generated code and designs as carefully as a colleague's pull request.
+- **Providing context** such as constraints, existing code and requirements to get useful output.
+- **Verifying** claims about libraries, limits and APIs against documentation.
+- **Knowing the fundamentals**, so you can spot when a suggested design has a hidden flaw, such as a missing idempotency key or a hot partition.
+
+<Callout type="interview">
+If an interviewer asks you to design an AI feature, treat the model as a slow, expensive, occasionally wrong dependency. Design around it with streaming, caching, fallbacks, evaluation and guardrails, and you will cover most of what they are looking for.
+</Callout>
+
+<KeyTakeaways>
+- New roles such as ML, platform and data engineers work alongside software engineers on AI products.
+- Interviews now include AI-specific design problems and AI components within classic problems.
+- Strong answers cover quality targets, token-based estimation, gateways, retrieval, evaluation, safety and cost.
+- AI tools are part of daily engineering, but engineers remain accountable for verifying their output.
+</KeyTakeaways>

@@ -1,0 +1,79 @@
+# Checks every push and pull request. Deploys to Firebase Hosting (live on main, preview
+# channels on PRs) once the repository is configured — see README → "Continuous deployment".
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+      - run: yarn install --immutable
+
+      # Mermaid diagrams are rendered to SVG at build time in headless Chromium.
+      - run: yarn playwright install --with-deps chromium
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/mermaid-svg
+          key: mermaid-${{ hashFiles('src/content/**/*.mdx', 'build/remark-mermaid-svg.ts') }}
+          restore-keys: mermaid-
+
+      - run: yarn typecheck
+      - run: yarn lint
+      - run: yarn test
+
+      # Without Firebase repo variables this is a validation build against the demo project.
+      - run: yarn vite build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY || 'demo-key' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN || 'demo-bytearchitect.firebaseapp.com' }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID || 'demo-bytearchitect' }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID || 'demo-app-id' }}
+          VITE_USE_EMULATORS: ${{ vars.VITE_FIREBASE_PROJECT_ID && 'false' || 'true' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          retention-days: 3
+
+  deploy:
+    needs: check
+    # Only when Firebase is configured, and never for PRs from forks (no access to secrets).
+    if: >-
+      vars.VITE_FIREBASE_PROJECT_ID != '' &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          # "live" on main; an auto-named, expiring preview channel for pull requests.
+          channelId: ${{ github.event_name == 'push' && 'live' || '' }}

@@ -1,0 +1,59 @@
+---
+title: Detailed Design of a Microblogging Service
+---
+
+This lesson examines the hybrid fan-out, storage and caching choices, and the pipelines for search and trends.
+
+## The hybrid fan-out
+
+We classify authors by follower count. Accounts below a threshold, say 100,000 followers, are **pushed**: their posts are inserted into followers' cached timelines. Accounts above it are **pulled**: their posts are not fanned out, and the timeline service merges them in at read time.
+
+```mermaid
+flowchart TB
+  Post["New post"] --> Check{"Author followers above threshold?"}
+  Check -->|no| Push["Fan out post ID to active followers' timelines"]
+  Check -->|yes| Skip["Store in author timeline only"]
+  Read["Home timeline request"] --> Cached["Read cached timeline IDs"]
+  Read --> Celebs["Fetch recent posts of followed celebrity accounts"]
+  Cached --> Merge["Merge by post ID, hydrate, filter"]
+  Celebs --> Merge
+```
+
+A typical user follows only a handful of celebrity accounts, so the pull step adds a few extra lookups, each served from a hot cache of that celebrity's recent posts. Because millions of readers request the same celebrity posts, those caches have extremely high hit rates.
+
+The threshold is a tunable trade-off. Lower values reduce fan-out write spikes but add more merge work at read time.
+
+## Timeline cache details
+
+- Each user's home timeline is a list of the most recent several hundred post IDs, stored in an in-memory store such as Redis, sharded by user ID and replicated.
+- Inserts are prepends with truncation, so the list stays bounded.
+- A user who scrolls beyond the cached range falls back to a slower merge from user timelines.
+- The cache is not the source of truth: it can be rebuilt from the social graph and user timelines, so losing a shard causes slower reads for some users, not data loss.
+
+## Storage choices
+
+**Posts** are written once, read many times and looked up by ID, which suits a wide-column or key-value store sharded by post ID. Sharding by post ID spreads load evenly, while a secondary structure keyed by author supports user timelines.
+
+**The social graph** needs two lookups: the followers of an author (for fan-out) and the accounts a user follows (for rebuilds and celebrity merges). Storing edges twice, once per direction and each sharded by its lookup key, makes both lookups single-shard. Follower lists for large accounts are paged.
+
+**Engagement counts** use sharded counters: a like increments one of several counter shards for the post, and reads sum the shards, with the sum cached. Counts are eventually consistent.
+
+## Handling bursts
+
+During a global event, posting rates spike and many posts mention the same topic. The event stream absorbs bursts: fan-out workers consume at their own pace, and timeline delivery is delayed by seconds rather than failing. Autoscaling adds fan-out workers based on consumer lag. Rate limits protect against abusive accounts that post in loops.
+
+## Search
+
+Posts must be searchable within seconds. The search indexer consumes the post stream and writes to an **inverted index** partitioned by time: a small, frequently updated in-memory index covers the last few minutes to hours, and larger, immutable segments cover older periods. Queries search recent partitions first, because most searches want recent posts, and older partitions only if more results are needed. Results are ranked by recency, engagement and author reputation.
+
+## Trends
+
+The trend detector consumes the post stream and counts hashtags and phrases per region in sliding windows, for example five-minute buckets. A topic trends when its current rate is significantly higher than its historical baseline, not merely when it is popular. Approximate counting structures such as count-min sketches keep memory bounded, and spam filters prevent coordinated campaigns from manufacturing trends.
+
+<KeyTakeaways>
+- Posts from accounts below a follower threshold are pushed; posts from larger accounts are pulled and merged at read time.
+- Home timelines are bounded lists of post IDs in a sharded, replicated in-memory store that can be rebuilt.
+- The social graph is stored in both directions so fan-out and rebuilds are single-shard lookups.
+- The event stream absorbs bursts; fan-out workers scale on consumer lag.
+- Search uses a time-partitioned inverted index; trends compare current rates against baselines using sliding windows.
+</KeyTakeaways>

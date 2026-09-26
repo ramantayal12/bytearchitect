@@ -1,0 +1,77 @@
+---
+title: Numbers Every Engineer Should Know
+---
+
+Back-of-the-envelope estimation is the skill of producing rough but useful numbers quickly: how many servers you need, how much storage a year of data will take, whether a design will meet a latency target. It relies on a small set of reference numbers you should know by heart, plus the discipline to round aggressively.
+
+## Latency reference numbers
+
+Exact values change with hardware generations, but the **orders of magnitude** are stable and they are what matter for design:
+
+| Operation | Approximate latency |
+| --- | --- |
+| L1 cache reference | 1 ns |
+| Main memory reference | 100 ns |
+| Compress 1 KB with a fast codec | 2 µs |
+| Read 1 MB sequentially from memory | 3 µs |
+| Round trip within a data center | 500 µs |
+| Random read from SSD | 16 µs – 100 µs |
+| Read 1 MB sequentially from SSD | 50 µs – 1 ms |
+| Disk (HDD) seek | 2–10 ms |
+| Read 1 MB sequentially from HDD | 1–5 ms |
+| Round trip between continents | 100–150 ms |
+
+Takeaways that shape designs:
+
+- **Memory is about 100× faster than SSD**, and SSD far faster than spinning disks. This is why caches exist.
+- **Network round trips inside a data center** are cheap relative to cross-continent trips. Chatty protocols across regions are slow.
+- **Sequential access beats random access**, especially on disks. Log-structured storage exploits this.
+
+```mermaid
+flowchart LR
+  M["Memory<br/>~100 ns"] --> S["SSD read<br/>~100 µs"] --> D["DC round trip<br/>~0.5 ms"] --> H["HDD seek<br/>~10 ms"] --> X["Cross-continent<br/>~150 ms"]
+```
+
+## Powers of two and data sizes
+
+| Power | Approximate value | Name |
+| --- | --- | --- |
+| 2^10 | 1 thousand | 1 KB |
+| 2^20 | 1 million | 1 MB |
+| 2^30 | 1 billion | 1 GB |
+| 2^40 | 1 trillion | 1 TB |
+| 2^50 | 1 quadrillion | 1 PB |
+
+Typical sizes: a character is 1–4 bytes; a tweet-length text ~ 300 bytes with metadata; a small JSON record ~ 1 KB; a compressed photo ~ 200 KB–2 MB; a minute of HD video ~ 50–100 MB.
+
+## Time conversions
+
+A day has 86,400 seconds; round to **100,000** for quick math. A month is about 2.5 million seconds, and a year about 30 million.
+
+This gives a handy rule: **1 million requests per day ≈ 12 requests per second** on average. Peak traffic is often 2–10× the average, so design for the peak.
+
+## Rough server capacity
+
+Single-server capacity varies widely with workload, but useful starting points are:
+
+- A web or API server handling simple requests: **a few thousand to tens of thousands of requests per second**.
+- A single relational database instance: **thousands to tens of thousands of simple queries per second**, far fewer for complex queries or heavy writes.
+- An in-memory cache node: **around 100,000+ simple operations per second**.
+
+State your assumption explicitly — “assume one server handles about 5,000 requests per second” — so the interviewer can follow and correct you.
+
+<Callout type="tip">
+Round early and often. 86,400 becomes 100,000; 3.7 million becomes 4 million. The goal is to know whether you need 10 servers or 1,000, not whether you need 37 or 41.
+</Callout>
+
+## Availability and durability numbers
+
+Recall from the previous chapter: 99.9% availability allows about 8.8 hours of downtime per year, and 99.99% about 53 minutes. Cloud object stores typically advertise very high durability (for example, eleven nines) by storing multiple copies or erasure-coded fragments across failure domains.
+
+<KeyTakeaways>
+- Memorize orders of magnitude: memory ~100 ns, SSD ~100 µs, data-center round trip ~0.5 ms, disk seek ~10 ms, cross-continent ~150 ms.
+- Sequential access and in-memory data are dramatically faster than random disk access.
+- Use powers of two for data sizes and round a day to 100,000 seconds.
+- 1 million requests per day is about 12 per second; design for peak, not average.
+- State capacity assumptions explicitly and round aggressively.
+</KeyTakeaways>

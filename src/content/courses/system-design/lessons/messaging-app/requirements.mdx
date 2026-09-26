@@ -1,0 +1,62 @@
+---
+title: Requirements of a Messaging App
+---
+
+This lesson scopes the messaging app and estimates its scale.
+
+## Functional requirements
+
+- **One-to-one chat:** send and receive text messages in real time.
+- **Group chat:** groups of up to a few hundred members (large broadcast channels are out of scope).
+- **Media:** send photos, videos, voice notes and documents.
+- **Offline delivery:** messages sent to offline users are delivered when they reconnect.
+- **Receipts:** sent, delivered and read indicators.
+- **Presence:** last seen and online status; typing indicators.
+- **Multi-device:** a user can use a phone plus a few linked devices such as a desktop app.
+- **Push notifications** for new messages when the app is in the background.
+- **End-to-end encryption** for all message content.
+
+Out of scope: voice and video calls, payments, status stories and message search on the server (search happens on the device because content is encrypted).
+
+## Non-functional requirements
+
+- **Low latency:** delivery within a few hundred milliseconds when both parties are online.
+- **Reliability:** no message loss once the server acknowledges it; at-least-once delivery with deduplication, so users see each message exactly once.
+- **Ordering:** messages in a conversation appear in the order they were sent.
+- **High availability:** the service must stay up; users rely on it for critical communication.
+- **Privacy:** the server should store as little as possible, and delete messages from its queues once they are delivered.
+- **Efficiency on mobile:** minimize battery and data use.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 2 billion |
+| Messages sent per user per day | 50 |
+| Average text message size (encrypted, with metadata) | 200 bytes |
+| Share of messages with media | 10 percent, averaging 200 KB |
+| Peak concurrent connections | 500 million devices |
+
+**Message rate:** 2 billion × 50 = 100 billion messages per day, about 1.16 million per second on average and perhaps 3 million per second at peak. Receipts and presence updates add several times as many small events.
+
+**Connections:** 500 million concurrent connections. If one gateway server holds about 100,000 connections comfortably, that is about 5,000 gateway servers, plus spare capacity for failover and rolling deployments.
+
+**Storage for undelivered messages:** the server only needs to hold messages until they are delivered. If 10 percent of messages wait an average of an hour, the in-flight volume is small, perhaps a few terabytes at any time, but it must be highly durable and fast.
+
+**Optional history storage:** if the product stores history on the server for multi-device sync, 100 billion × 200 bytes = 20 TB of text per day, around 7 PB per year before replication. Many privacy-focused apps avoid this and sync history between the user's own devices instead.
+
+**Media:** 10 billion media messages × 200 KB = 2 PB per day. Media is uploaded once to a blob store and downloaded by recipients; it can be deleted after all recipients have downloaded it, or after a retention period.
+
+**Bandwidth:** text is modest, about 1.16 million × 200 bytes ≈ 230 MB per second. Media dominates at around 23 GB per second of uploads on average, and more for downloads in groups.
+
+<Callout type="note">
+The defining numbers are hundreds of millions of concurrent connections and millions of messages per second. Connection management and efficient routing between gateways are the core of the design.
+</Callout>
+
+<KeyTakeaways>
+- Core features are one-to-one and group chat, media, offline delivery, receipts, presence, multi-device and end-to-end encryption.
+- Users must see each message exactly once, in order, with no loss after acknowledgement.
+- Estimates: about 100 billion messages per day, millions per second at peak and 500 million concurrent connections.
+- Thousands of gateway servers are needed just to hold connections.
+- Undelivered-message storage is small but must be durable; media dominates bandwidth and storage.
+</KeyTakeaways>

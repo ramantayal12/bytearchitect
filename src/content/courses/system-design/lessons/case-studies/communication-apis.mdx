@@ -1,0 +1,84 @@
+---
+title: Building Communication APIs at Scale
+---
+
+Communication platforms offer APIs that let developers send SMS messages, make phone calls, send emails and push verification codes with a single HTTP request. Behind that request, the platform must route messages to hundreds of telecom carriers and email providers worldwide, each with its own protocols, rate limits and failure modes, and report delivery status back to the customer. This case study covers the design of a multi-tenant messaging API.
+
+## Requirements
+
+- **Functional:** an API to send SMS and email; delivery status callbacks (webhooks) to customers; scheduling; templates; number and sender management; opt-out handling.
+- **Non-functional:** high availability for the API, reliable delivery with at-least-once semantics, fair sharing of capacity among tenants, compliance with regional regulations, and observability of every message's journey.
+- **Scale:** billions of messages per month, with individual customers sending bursts of millions (for example, a bank alerting every customer).
+
+## Architecture
+
+```mermaid
+flowchart TB
+  Cust["Customer app"] --> API["Messaging API (auth, validation, idempotency)"]
+  API --> Store[("Message store: status per message")]
+  API --> Q["Per-tenant queues"]
+  Q --> Sched["Scheduler / fair dispatcher"]
+  Sched --> Router["Routing engine"]
+  Router --> C1["Carrier connector A"]
+  Router --> C2["Carrier connector B"]
+  Router --> E1["Email provider connector"]
+  C1 --> DLR["Delivery receipts"]
+  C2 --> DLR
+  DLR --> Store
+  Store --> Hooks["Webhook dispatcher"] --> Cust
+```
+
+### Accepting requests
+
+The API authenticates the customer, validates the destination and content, checks opt-out lists and account balance, and stores the message with status `queued`. It returns a message ID immediately; delivery happens asynchronously. An **idempotency key** header lets customers retry API calls without sending duplicates.
+
+### Fairness across tenants
+
+If one customer submits 10 million messages, a single shared queue would delay everyone else's time-sensitive verification codes. Messages go into **per-tenant queues**, and a dispatcher pulls from them using weighted fair queuing: each tenant gets a share of throughput according to its plan, and idle capacity is redistributed. Verification codes and other urgent traffic can use a separate high-priority lane.
+
+### Routing to carriers
+
+The routing engine chooses a carrier connection for each message based on destination country and network, cost, current delivery success rates and latency. Each carrier connection has strict **throughput limits**, so the engine applies per-connection rate limiting and spreads load across alternatives. If a carrier's success rate drops, traffic automatically shifts to others, much like health-based load balancing.
+
+<Slides title="Journey of one SMS">
+<Slide caption="1. Accepted: the API stores the message and queues it for the tenant.">
+
+```mermaid
+flowchart LR
+  API["API"] --> Store[("status: queued")] --> Q["Tenant queue"]
+```
+
+</Slide>
+<Slide caption="2. Routed: the dispatcher selects it fairly, and the router picks the healthiest, cheapest carrier for the destination.">
+
+```mermaid
+flowchart LR
+  Q["Tenant queue"] --> D["Fair dispatcher"] --> R["Router"] --> C["Carrier B"]
+```
+
+</Slide>
+<Slide caption="3. Reported: the carrier's delivery receipt updates the status, and a webhook notifies the customer.">
+
+```mermaid
+flowchart LR
+  C["Carrier B"] -->|delivered| Store[("status: delivered")] --> W["Webhook to customer"]
+```
+
+</Slide>
+</Slides>
+
+### Delivery status and webhooks
+
+Carriers send **delivery receipts** asynchronously, sometimes minutes later, and sometimes never. The message store records each state transition (queued, sent, delivered, failed, undelivered). The webhook dispatcher posts updates to customers' endpoints with retries and exponential backoff, and signs each request so customers can verify it. Because customers' endpoints may be slow or down, webhook delivery is isolated per customer, so one failing endpoint cannot back up others.
+
+## Compliance and abuse
+
+Regulations differ by country: registered sender IDs, quiet hours, consent requirements and mandatory opt-out keywords. The platform enforces these centrally. It also watches for fraud, such as traffic pumping, where attackers trigger verification messages to premium numbers they profit from, using rate limits per destination prefix and anomaly detection.
+
+<KeyTakeaways>
+- A communication API accepts requests quickly, stores them and delivers asynchronously with status tracking.
+- Idempotency keys let customers retry API calls safely.
+- Per-tenant queues with weighted fair dispatching keep one large sender from delaying everyone else.
+- A routing engine chooses carriers by destination, cost and live health, respecting per-connection rate limits.
+- Signed, retried webhooks report delivery status, isolated per customer; compliance and fraud controls are enforced centrally.
+</KeyTakeaways>

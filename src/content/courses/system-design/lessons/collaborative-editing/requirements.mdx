@@ -1,0 +1,67 @@
+---
+title: Requirements of Collaborative Editing
+---
+
+This lesson scopes the collaborative editor and estimates its load.
+
+## Functional requirements
+
+- **Create and open documents** containing rich text: paragraphs, headings, lists, formatting, tables and images.
+- **Real-time co-editing:** multiple users edit simultaneously and see each other's changes within a fraction of a second.
+- **Presence:** see who is viewing the document and where their cursors and selections are.
+- **Comments:** add comments anchored to ranges of text, with replies and resolution.
+- **Version history:** view and restore earlier versions, and see who changed what.
+- **Sharing and permissions:** owner, editor, commenter and viewer roles, per user or by link.
+- **Offline editing:** continue editing without a connection and merge on reconnect.
+
+Out of scope: spreadsheets and slides, document search across a user's files, real-time voice or video, and add-ons.
+
+## Non-functional requirements
+
+- **Low latency:** local edits appear instantly; remote edits appear within about 100 to 300 ms.
+- **Consistency:** all collaborators converge to the same document; no edit is lost.
+- **Durability:** once an edit is acknowledged, it survives failures.
+- **Availability:** documents should remain editable during partial failures; offline editing covers network loss.
+- **Scalability:** hundreds of millions of documents, most rarely opened; some documents with dozens or hundreds of concurrent editors.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 100 million |
+| Documents opened per user per day | 5 |
+| Concurrently open documents at peak | 20 million |
+| Average editors per open document | 1.5 (most documents have one editor) |
+| Operations per active editor | about 1 per second while typing, batched |
+| Average document size | 100 KB |
+| Total documents | 5 billion |
+
+**Operations:** if a third of open documents are actively being edited at any moment, with 1.5 editors each typing about one batched operation per second, that is 20 million × ⅓ × 1.5 ≈ 10 million operations per second at peak. Each operation is small, around 100 bytes, so about 1 GB per second in total.
+
+**Connections:** each open document tab keeps a persistent connection, so tens of millions of concurrent connections, spread across gateway servers.
+
+**Storage:** 5 billion documents × 100 KB = 500 TB for current snapshots. Operation history is larger: storing every operation forever would grow by tens of terabytes per day, so history is compacted into periodic snapshots plus recent operations.
+
+**Media:** images embedded in documents are stored in a blob store and served by a CDN.
+
+<Callout type="note">
+Although the total operation rate is large, each individual document has a small rate: a few operations per second from a few editors. This means we can process each document's operations on a single server, which greatly simplifies ordering.
+</Callout>
+
+## Latency expectations by action
+
+| Action | Expected latency |
+| --- | --- |
+| Own keystroke visible | Instant (local) |
+| Collaborator's keystroke visible | 100 to 300 ms |
+| Cursor movement of collaborator | 100 to 500 ms, can be throttled |
+| Opening a document | under 1 to 2 seconds |
+| Restoring a version | a few seconds |
+
+<KeyTakeaways>
+- Core features are real-time co-editing of rich text, presence, comments, version history, permissions and offline editing.
+- Collaborators must converge with no lost edits, while local edits appear instantly.
+- Peak load is about 10 million small operations per second across tens of millions of connections.
+- Each document has a low operation rate, so it can be served by one server at a time.
+- Operation history is compacted into snapshots to keep storage manageable.
+</KeyTakeaways>

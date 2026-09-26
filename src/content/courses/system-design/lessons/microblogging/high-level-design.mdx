@@ -1,0 +1,111 @@
+---
+title: High-Level Design of a Microblogging Service
+---
+
+This lesson covers the API, the data model and the service architecture of the microblogging platform, with the timeline at its center.
+
+## API
+
+```http
+POST   /v1/posts                        { text, mediaIds?, replyTo?, repostOf? } -> { postId }
+DELETE /v1/posts/{id}
+GET    /v1/timeline/home?cursor=...     -> { posts: [...], nextCursor }
+GET    /v1/users/{id}/posts?cursor=...
+POST   /v1/users/{id}/follow
+DELETE /v1/users/{id}/follow
+POST   /v1/posts/{id}/likes
+GET    /v1/search?q=...&cursor=...
+GET    /v1/trends?region=...
+```
+
+Media is uploaded first to a media service that returns IDs, so the post request itself stays small.
+
+## Data model
+
+| Data | Store | Notes |
+| --- | --- | --- |
+| Posts | Wide-column or sharded key-value store, keyed by post ID | Immutable after creation, except deletion; IDs are time-sortable (Snowflake-style) |
+| User timelines (own posts) | Wide-column store, keyed by author ID, clustered by post ID descending | Efficient "latest N posts by this author" |
+| Social graph | Sharded store with two indexes: followers of X and followees of X | Both directions are queried frequently |
+| Home timelines | Distributed in-memory cache of post ID lists per user | Rebuildable from the graph and user timelines |
+| Engagement counts | Sharded counters with a cache | High write rates on popular posts |
+| Media | Blob store behind a CDN | Large and immutable |
+
+Time-sortable post IDs, from the sequencer building block, let timelines sort and paginate by ID without a separate timestamp index.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  Client["Clients"] --> LB["Edge load balancers"]
+  LB --> API["API gateway"]
+  API --> PostSvc["Post service"]
+  API --> TLSvc["Timeline service"]
+  API --> GraphSvc["Social graph service"]
+  API --> SearchSvc["Search service"]
+  API --> Media["Media service"] --> Blob[("Blob store + CDN")]
+  PostSvc --> PostStore[("Post store")]
+  PostSvc --> Stream["Post event stream"]
+  Stream --> Fanout["Fan-out service"]
+  Fanout --> GraphSvc
+  Fanout --> TLCache[("Home timeline cache")]
+  Stream --> Indexer["Search indexer"] --> Idx[("Search index")]
+  Stream --> Trends["Trend detection"]
+  Stream --> Notif["Notification service"]
+  TLSvc --> TLCache
+  TLSvc --> PostCache[("Post cache")]
+  PostCache -.-> PostStore
+```
+
+## Writing a post
+
+<Slides title="The write path">
+<Slide caption="1. The post service assigns a time-sortable ID, stores the post and appends it to the author's user timeline. The write is acknowledged to the client.">
+
+```mermaid
+flowchart LR
+  C["Client"] --> P["Post service"] --> S[("Post store + author timeline")]
+  P -->|ack| C
+```
+
+</Slide>
+<Slide caption="2. A post event is published to the stream. Consumers work independently and asynchronously.">
+
+```mermaid
+flowchart LR
+  P["Post service"] --> E["Post event stream"]
+  E --> F["Fan-out"]
+  E --> I["Search indexer"]
+  E --> T["Trends"]
+  E --> N["Notifications"]
+```
+
+</Slide>
+<Slide caption="3. The fan-out service fetches the author's followers in pages and prepends the post ID to each active follower's cached home timeline.">
+
+```mermaid
+flowchart LR
+  F["Fan-out"] --> G["Followers of author, paged"]
+  G --> H1["Timeline cache: follower 1"]
+  G --> H2["Timeline cache: follower 2"]
+  G --> H3["Timeline cache: follower N"]
+```
+
+</Slide>
+</Slides>
+
+Fan-out skips followers who have not been active recently; their timelines are rebuilt on demand when they return. This saves a large share of fan-out work, because many accounts are dormant.
+
+## Reading the home timeline
+
+The timeline service reads the user's list of post IDs from the timeline cache, merges in recent posts from any followed **celebrity accounts** (which are not pushed, as discussed in the detailed design), and then **hydrates** the IDs: it fetches post contents from the post cache in a batch, along with author profiles and engagement counts. It filters out deleted posts and posts from accounts the user has since blocked, then returns a page.
+
+If a user's timeline is missing from the cache, for example after a long absence, the service rebuilds it by pulling recent posts from each followee's user timeline and merging them. This is slow, but it happens rarely.
+
+<KeyTakeaways>
+- Posts are stored once with time-sortable IDs; home timelines hold only post ID lists in memory.
+- The social graph is stored with both follower and followee indexes.
+- Publishing a post acknowledges quickly, then events drive fan-out, indexing, trends and notifications asynchronously.
+- Fan-out skips inactive users, whose timelines are rebuilt on demand.
+- Reading a timeline merges cached IDs with celebrity posts, hydrates them in batches and filters deleted or blocked content.
+</KeyTakeaways>

@@ -1,0 +1,90 @@
+---
+title: High-Level Design of Sharded Counters
+---
+
+Let's design a counting service that the rest of the platform — posts, videos, profiles — can use for likes, views and follower counts.
+
+## API
+
+```text
+createCounter(counterId, initialShards = 1)
+increment(counterId, delta = 1)
+getCount(counterId) -> value
+```
+
+The counter service hides sharding from its callers. Application teams simply call `increment("post:98765:likes")`.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  C[Clients] --> API[Counter API servers]
+  API -->|increment| SH[("Sharded counter store<br/>counterId#shard → value")]
+  AGG[Aggregator] -->|periodic sum| SH
+  AGG --> RC[(Read cache: counterId → total)]
+  API -->|getCount| RC
+  MD[(Counter metadata:<br/>shard count)] -.-> API
+```
+
+### Write path
+
+1. The API server looks up the counter's **shard count** (cached metadata).
+2. It picks a shard — randomly, or by hashing the request ID — and increments `counterId#k`.
+3. The store applies the increment atomically; each shard key may live on a different storage node.
+
+### Read path
+
+Summing N shards on every read would multiply read load. Instead:
+
+- An **aggregator** periodically (for example, every few seconds) reads all shards of active counters, sums them and writes the total to a **read cache**.
+- `getCount` returns the cached total — one fast lookup.
+
+This makes reads cheap and writes contention-free, at the cost of the displayed count lagging by a few seconds.
+
+## Starting small, scaling up
+
+Most counters are cold: a typical post gets a handful of likes. Giving every counter 64 shards would waste storage and make aggregation expensive. Instead, counters start with **one shard** and grow when they get hot:
+
+<Slides title="Dynamic shard scaling">
+<Slide caption="1. A new post's like counter starts with a single shard.">
+
+```mermaid
+flowchart LR
+  P["post:1 likes"] --> S1["shard 1"]
+```
+
+</Slide>
+<Slide caption="2. The post goes viral; the service detects a high increment rate and raises the shard count to 16.">
+
+```mermaid
+flowchart LR
+  P["post:1 likes"] --> S1["shard 1"] & S2["shard 2"] & S3["…"] & S16["shard 16"]
+```
+
+</Slide>
+<Slide caption="3. Writes spread across all shards; the aggregator sums them into the cached total.">
+
+```mermaid
+flowchart LR
+  S1["shard 1"] & S2["shard 2"] & S16["shard 16"] --> A[Aggregator] --> T["total in cache"]
+```
+
+</Slide>
+</Slides>
+
+Increasing the shard count is safe: new increments start landing on new shards, and the aggregator sums all shards that exist. Decreasing it requires folding values from removed shards into remaining ones.
+
+## Choosing the number of shards
+
+The shard count trades write capacity against read and storage cost. If one shard can absorb roughly 1,000 increments per second, a counter receiving 20,000 increments per second needs at least 20 shards, plus headroom — say 32. The service can compute this automatically from the observed increment rate over the last minute, raising the count quickly when traffic surges and lowering it slowly after traffic subsides, to avoid oscillating back and forth.
+
+## Storage choice
+
+The counter store should support **atomic increments** at high throughput: an in-memory store with persistence, or a wide-column database with native counter types. Shard keys like `post:98765:likes#7` spread naturally across partitions via hashing.
+
+<KeyTakeaways>
+- The counter service exposes create, increment and getCount, hiding sharding from callers.
+- Writes increment one randomly chosen shard; reads return a periodically aggregated, cached total.
+- Counters start with one shard and scale up when they become hot.
+- The store must support fast atomic increments; hashed shard keys spread load across nodes.
+</KeyTakeaways>

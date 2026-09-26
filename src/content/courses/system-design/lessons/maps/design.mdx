@@ -1,0 +1,98 @@
+---
+title: Design of a Maps Service
+---
+
+This lesson lays out the API, the data model and the high-level architecture of the maps service. The central idea is to separate the three workloads identified in the estimates: static map content, on-demand routing and streaming location data.
+
+## API
+
+```http
+GET  /v1/tiles/{z}/{x}/{y}.pbf                       -> vector tile (served via CDN)
+GET  /v1/geocode?q=...                               -> candidate places with coordinates
+GET  /v1/reverse-geocode?lat=...&lng=...             -> address
+GET  /v1/routes?from=lat,lng&to=lat,lng&mode=drive   -> routes with polyline, steps, distance, ETA
+POST /v1/navigation/sessions                         { routeId } -> { sessionId }
+POST /v1/navigation/sessions/{id}/pings              [ { lat, lng, speed, heading, ts }, ... ]
+       -> { onRoute, updatedEta, newRoute? }
+```
+
+Tiles are addressed by zoom level `z` and tile coordinates `x` and `y`. At zoom 0 one tile covers the world; each zoom level splits every tile into four. This scheme gives every tile a stable URL that caches perfectly.
+
+## Data model
+
+- **Road graph:** nodes are intersections, and directed edges are road segments with attributes such as length, road class, speed limit, turn restrictions and toll flags. It is stored as a compact binary file per region and loaded into memory by routing servers.
+- **Places:** points of interest with name, category, coordinates and address, stored in a database with a spatial index and a search index.
+- **Tiles:** vector tiles, which encode geometry and labels compactly and are styled on the client, stored in a blob store and served through a CDN.
+- **Traffic:** current speed per edge in a fast key-value store, and historical speeds by edge, day of week and time of day in a columnar store.
+
+## High-level architecture
+
+```mermaid
+flowchart TB
+  Client["Mobile / web client"] --> CDN["CDN"]
+  CDN --> TileStore[("Tile blob store")]
+  Client --> GW["API gateway"]
+  GW --> Geo["Geocoding and place search"]
+  GW --> RouteSvc["Routing service"]
+  GW --> Nav["Navigation service"]
+  Geo --> PlaceDB[("Places DB + search index")]
+  RouteSvc --> Graph[("In-memory road graph per region")]
+  RouteSvc --> Live[("Live traffic KV store")]
+  RouteSvc --> ETA["ETA model"]
+  Nav --> Stream["Location stream"]
+  Stream --> Proc["Traffic processors"]
+  Proc --> Live
+  Proc --> Hist[("Historical speeds")]
+  Pipeline["Map data pipeline"] --> TileStore
+  Pipeline --> Graph
+  Pipeline --> PlaceDB
+```
+
+### Map data pipeline
+
+An offline pipeline ingests source data, resolves conflicts, validates topology (for example, that roads actually connect) and produces three outputs: tiles, the road graph and the places database. New versions are rolled out gradually, a region at a time, so errors can be caught before they reach every user.
+
+### Routing
+
+The routing service receives two coordinates. It first **snaps** each point to the nearest road edge, then runs a shortest-path search on the road graph using travel times as edge weights. Travel times combine live traffic for the near future with historical speeds for segments the driver will reach later. The ETA model then refines the raw path time using learned corrections, for example for traffic lights and turns.
+
+### Navigation and traffic
+
+During a trip, the client sends batched pings. The navigation service **map-matches** each batch to the road network, determines whether the user is still on route and returns an updated ETA. If the user deviates, the service requests a new route. In parallel, pings flow into a partitioned stream, where traffic processors compute average speeds per edge over sliding windows and write them to the live traffic store.
+
+<Slides title="From location pings to live traffic">
+<Slide caption="1. Devices batch pings and send them to the navigation service.">
+
+```mermaid
+flowchart LR
+  D["Device"] -->|batched pings| N["Navigation service"]
+```
+
+</Slide>
+<Slide caption="2. Pings are map-matched to road edges and published to a stream partitioned by region.">
+
+```mermaid
+flowchart LR
+  N["Navigation service"] --> M["Map matching"] --> S["Stream partitions by region"]
+```
+
+</Slide>
+<Slide caption="3. Stream processors aggregate speeds per edge over a sliding window and update the live traffic store used by routing.">
+
+```mermaid
+flowchart LR
+  S["Stream"] --> P["Window aggregation per edge"] --> L[("Live traffic store")] --> R["Routing"]
+```
+
+</Slide>
+</Slides>
+
+Pings are anonymized before aggregation: only speeds on edges are kept, not trajectories tied to users.
+
+<KeyTakeaways>
+- Tiles have stable zoom and coordinate URLs, are stored in a blob store and served through a CDN.
+- An offline pipeline turns source data into tiles, a road graph and a places database, rolled out region by region.
+- Routing snaps endpoints to the graph, searches with time-dependent edge weights and refines results with an ETA model.
+- Navigation map-matches pings, checks whether the user is on route and triggers rerouting.
+- Streaming processors turn anonymized pings into live speeds per road edge.
+</KeyTakeaways>

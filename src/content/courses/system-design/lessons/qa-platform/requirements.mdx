@@ -1,0 +1,63 @@
+---
+title: Requirements of a Q&A Platform
+---
+
+This lesson scopes the Q&A platform and estimates its load, covering the **Scope** and **Capacity** steps of SCALED.
+
+## Functional requirements
+
+- **Ask:** a signed-in user posts a question with a title, body and topic tags.
+- **Answer:** users write rich-text answers that may include images and links.
+- **Vote:** users upvote or downvote answers; answers are ranked by quality.
+- **Comment:** users comment on questions and answers.
+- **Follow:** users follow topics, questions and other users.
+- **Feed:** each signed-in user sees a personalized home feed.
+- **Search:** anyone can search questions; similar and duplicate questions are suggested while asking.
+
+Out of scope: messaging between users, advertising, spaces or groups, and moderation tooling, although we will note where moderation hooks in.
+
+## Non-functional requirements
+
+- **Availability:** reading must stay up even when writing features degrade.
+- **Low latency:** question pages should load quickly for readers arriving from search engines, because slow pages rank lower and lose visitors.
+- **Scalability:** the system must handle a growing catalog and traffic spikes when a question goes viral.
+- **Read-your-writes consistency** for a user's own posts; **eventual consistency** is acceptable for vote counts, feeds and search.
+- **Durability:** questions and answers are the platform's core asset and must not be lost.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Monthly active users | 300 million |
+| Daily active users | 100 million |
+| Page views per user per day | 10 |
+| New questions per day | 1 million |
+| New answers per day | 3 million |
+| Votes per day | 50 million |
+| Average question or answer size (text) | 2 KB |
+| Share of answers with an image | 20 percent, averaging 200 KB |
+
+**Reads:** 100 million × 10 = 1 billion page views per day, about 11,600 per second on average and perhaps 35,000 per second at peak. Each page view might trigger several backend calls, such as the question, ranked answers, related questions and counts.
+
+**Writes:** 1 million questions + 3 million answers + 50 million votes, plus comments and follows, is roughly 60 million writes per day, about 700 per second on average. The read-to-write ratio is well above 10:1, and reads of question pages dwarf everything else.
+
+**Text storage:** 4 million posts × 2 KB is about 8 GB per day, roughly 3 TB per year. This is small enough that the text of every post could fit in a sharded relational database for years.
+
+**Media storage:** 3 million answers × 20 percent × 200 KB is about 120 GB per day, or around 44 TB per year before replication. Images belong in a blob store served through a CDN.
+
+**Bandwidth:** if an average page is 100 KB of HTML and JSON plus images served by the CDN, the origin serves roughly 1 billion × 100 KB = 100 TB per day, a little over 9 Gbps on average. Caching whole rendered pages for anonymous readers can cut this drastically.
+
+## Servers
+
+At a peak of 35,000 page views per second and around five backend calls per view, the application tier handles about 175,000 requests per second. At roughly 1,000 requests per second per server, that is around 175 servers at peak, plus headroom and redundancy across availability zones.
+
+<Callout type="note">
+The key conclusions: text data is modest, media data is large but simple, and traffic is dominated by reads of question pages, many from anonymous visitors. Those facts point towards aggressive caching of pages for anonymous readers and a blob store with a CDN for media.
+</Callout>
+
+<KeyTakeaways>
+- Core features are asking, answering, voting, commenting, following, a personalized feed and search.
+- Reads dominate, with a read-to-write ratio well above 10:1 and much traffic from anonymous search visitors.
+- Text storage is small, a few terabytes per year, while images need a blob store and CDN.
+- Users need to see their own posts immediately; counts, feeds and search can be eventually consistent.
+</KeyTakeaways>

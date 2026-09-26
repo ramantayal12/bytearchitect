@@ -1,0 +1,100 @@
+---
+title: Design of an AI Code Assistant
+---
+
+This lesson designs the code assistant: the editor plugin, context gathering, the low-latency completion path, the chat and edit path with repository retrieval, and the privacy controls around them.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph Editor["Editor plugin"]
+    Deb["Debounce and cancel"] --> Ctx["Local context builder"]
+    Cache["Local suggestion cache"]
+  end
+  Ctx --> Edge["Regional edge: auth, org policy, rate limits"]
+  Edge --> Comp["Completion service"] --> Small["Fast completion model (GPU pool)"]
+  Edge --> ChatSvc["Chat and edit orchestrator"] --> Large["Larger model (GPU pool)"]
+  ChatSvc --> Ret["Repository retrieval"] --> Idx[("Code index per org: symbols, embeddings")]
+  Indexer["Repository indexer"] --> Idx
+  Repo["Connected repositories"] --> Indexer
+  Edge --> Telemetry["Acceptance and latency telemetry"]
+```
+
+## The completion path
+
+Latency is everything, so work is pushed to the client and every step is minimized.
+
+<Slides title="From keystroke to suggestion">
+<Slide caption="1. The plugin waits for a brief pause in typing, cancels any in-flight request that is now stale, and checks a local cache.">
+
+```mermaid
+flowchart LR
+  K["Keystrokes"] --> D["Debounce ~75 ms"] --> C{"Local cache hit?"}
+  C -->|yes| Show["Show suggestion"]
+  C -->|no| Build["Build context"]
+```
+
+</Slide>
+<Slide caption="2. The plugin builds a prompt locally: code before and after the cursor, plus snippets from open files and recently edited files that look related.">
+
+```mermaid
+flowchart LR
+  Cur["Prefix and suffix around cursor"] --> P["Prompt within token budget"]
+  Open["Related snippets from open files"] --> P
+  Imp["Imported symbol signatures"] --> P
+```
+
+</Slide>
+<Slide caption="3. The request goes to the nearest region over a persistent connection. A small, fast model generates a short completion using fill-in-the-middle.">
+
+```mermaid
+flowchart LR
+  P["Prompt"] --> R["Nearest region"] --> M["Fast model"] --> S["Streamed short completion"]
+```
+
+</Slide>
+<Slide caption="4. The plugin post-processes the result, trimming it to a sensible boundary and checking brackets, then shows it as ghost text.">
+
+```mermaid
+flowchart LR
+  S["Raw completion"] --> T["Trim and validate"] --> G["Ghost text in editor"]
+```
+
+</Slide>
+</Slides>
+
+Key techniques:
+
+- **Fill-in-the-middle prompting** gives the model both the code before and after the cursor, so it completes code that fits between them.
+- **Local context selection** in the plugin avoids sending whole files. It ranks snippets from open and recently edited files by similarity to the code near the cursor, and includes signatures of imported symbols, all within a strict token budget.
+- **Cancellation**: when the developer keeps typing, the plugin cancels the outdated request, and the server stops generation to free GPU capacity.
+- **Persistent connections** to the nearest region (HTTP/2 or WebSocket) avoid connection setup on each request.
+- **Small, specialized models** on dedicated GPU pools with small batch sizes favor latency over throughput. Prompts that share a file prefix can reuse cached attention state.
+
+## The chat and edit path
+
+Chat questions like "where is the retry logic for payments?" need knowledge beyond open files. The orchestrator uses **repository retrieval**:
+
+- The **indexer** watches connected repositories and, on each change, parses files into structural chunks (functions, classes) using language parsers, extracts symbols and references, and embeds the chunks. Indexes are per organization and updated incrementally per commit.
+- **Retrieval** combines embedding search with symbol lookups ("find the definition of `PaymentRetryPolicy`") and keyword search, then assembles the most relevant chunks into a larger prompt.
+- The larger model produces an answer or a proposed diff. Edits are always shown to the developer for review before being applied.
+
+## Privacy and security controls
+
+- Code snippets are sent over encrypted connections and processed in memory; prompts are not retained or are kept only briefly for abuse monitoring, according to the organization's settings.
+- Indexes and caches are partitioned by organization, with encryption keys per tenant.
+- Organization policies can exclude files matching patterns, such as secrets or configuration, from ever being sent, enforced in the plugin before anything leaves the machine.
+- Suggestions can be filtered to avoid reproducing long verbatim passages of public code with incompatible licenses.
+
+## Reliability and cost
+
+If the completion service is slow or unavailable, the plugin simply shows nothing; the editor never blocks. Rate limits protect against runaway clients. Telemetry on acceptance rates and latency per model version drives canary rollouts of new models, which must beat the current version on both quality and speed before replacing it.
+
+<KeyTakeaways>
+- Completions are optimized end to end: debouncing, cancellation, local caching, local context building and nearby regions.
+- Fill-in-the-middle prompts with carefully budgeted snippets from open files make suggestions relevant.
+- Small, dedicated models on latency-optimized GPU pools serve completions; larger models serve chat and edits.
+- Chat uses an incremental, per-organization code index with structural chunks, symbols and embeddings.
+- Privacy controls include minimal retention, per-tenant isolation and client-side exclusion of sensitive files; failures degrade silently.
+</KeyTakeaways>

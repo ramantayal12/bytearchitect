@@ -1,0 +1,59 @@
+---
+title: Evaluating the Maps Design
+---
+
+This lesson evaluates the maps design against its requirements, discusses trade-offs and walks through how it behaves under failure.
+
+## Requirements check
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Low latency for tiles | Vector tiles with stable URLs are served from CDN edges; the client caches recently viewed tiles. |
+| Low latency for routes | The partitioned overlay graph lets queries explore a few thousand nodes and answer in milliseconds; servers hold graphs in memory. |
+| Accuracy | Time-dependent edge weights, customization with fresh traffic and a learned ETA model trained on completed trips. |
+| Availability | Routing servers are replicated per region; tiles are cached widely; the client continues navigation offline along the current route. |
+| Scalability | Stateless API tier, region-partitioned routing, partitioned streaming ingestion and horizontally scaled stream processors. |
+| Freshness | Traffic is aggregated in sliding windows and pushed to routing servers every minute or two; map updates roll out incrementally. |
+
+## Trade-offs
+
+**Preprocessing versus flexibility.** The overlay graph makes queries fast, but it assumes a fixed set of routing rules. Supporting a new option, such as "avoid tolls" or a truck profile with height restrictions, requires either another customization with modified weights or a separate set of shortcut weights per profile. Storing several weight sets costs memory but keeps each profile fast.
+
+**Freshness versus stability.** Applying new traffic weights every minute keeps routes current, but it can make rerouting jumpy: a driver may be sent onto a side street to save 30 seconds and then back. Navigation typically applies a threshold, only suggesting a new route when the saving is meaningful.
+
+**Privacy versus accuracy.** Requiring many distinct devices before publishing an edge speed protects privacy but reduces coverage on quiet roads, where historical speeds must fill in.
+
+**Consistency across servers.** Different routing replicas may briefly hold different traffic versions. That is acceptable: two users asking at the same moment might get slightly different ETAs, which is invisible in practice.
+
+## Failure scenarios
+
+```mermaid
+flowchart LR
+  A["Traffic pipeline stalls"] --> A1["Routing keeps last weights, falls back to historical speeds as data ages"]
+  B["Routing replica fails"] --> B1["Load balancer shifts queries to other replicas in the region"]
+  C["Region's routing cluster down"] --> C1["Queries route to another region that loads the same graph partitions"]
+  D["Client loses connectivity"] --> D1["Navigation continues along cached route and tiles, ETA based on local speed"]
+```
+
+## Handling peaks
+
+Rush hour creates predictable daily peaks; holidays and big events create less predictable ones. Because routing servers are stateless apart from their in-memory graph, they can scale out ahead of known peaks. Starting a new server requires loading several gigabytes of graph data, so autoscaling should be proactive, driven by schedules and forecasts rather than only by reactive CPU metrics.
+
+## Extensions
+
+- **Public transit** uses a different, time-expanded model of schedules and transfers rather than road edges.
+- **Multi-modal routing** combines walking, transit and ride-hailing segments.
+- **Offline maps** package tiles and a compact graph for a region on the device.
+- **Incident reports** from users feed the traffic pipeline as additional signals.
+
+<Callout type="tip">
+A crisp summary for the end of a maps interview: "Tiles are a CDN problem, routing is a precomputation problem and traffic is a streaming problem." It shows you understood that one product hides three very different systems.
+</Callout>
+
+<KeyTakeaways>
+- The design meets latency needs with CDN-served tiles and an in-memory partitioned graph for routing.
+- Route profiles such as "avoid tolls" need separate weight sets, trading memory for speed.
+- Rerouting thresholds balance fresh traffic with stable guidance.
+- Failures degrade gracefully: stale traffic falls back to history, and clients continue navigation offline.
+- Routing servers load large graphs on start-up, so capacity should be scaled proactively before predictable peaks.
+</KeyTakeaways>

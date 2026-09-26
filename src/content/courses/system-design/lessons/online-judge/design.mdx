@@ -1,0 +1,102 @@
+---
+title: Design of an Online Judge
+---
+
+This lesson designs an online judge that serves millions of users and survives contest-time spikes, with a strong focus on safely executing untrusted code.
+
+## Estimates
+
+Assume 5 million daily active users making 10 runs or submissions each: 50 million executions per day, about 580 per second on average. A popular contest with 50,000 participants can produce 5,000 submissions per minute near the end, with each submission running against 50 test cases. If a typical execution takes 2 seconds of CPU across all tests, the average load needs about 1,200 cores busy, and contest peaks several times more. Execution capacity is the dominant resource.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  Client["Browser editor"] --> API["API gateway"]
+  API --> Problems["Problem service"] --> PDB[("Problems DB")]
+  Problems --> Tests[("Test cases in blob store")]
+  API --> Subs["Submission service"] --> SDB[("Submissions DB")]
+  Subs --> Q["Judge queues: contest, submit, run"]
+  Q --> Workers["Judge workers"]
+  Workers --> Sandbox["Sandboxes"]
+  Workers --> Tests
+  Workers --> Results["Result events"]
+  Results --> SDB
+  Results --> Push["Realtime updates (WebSocket or SSE)"] --> Client
+  Results --> Board["Leaderboard service"] --> Cache[("Sorted sets in cache")]
+```
+
+## Submission flow
+
+1. The client sends code, language and problem ID to the submission service, which validates size limits, applies per-user rate limits, stores the submission with status `queued` and returns its ID.
+2. The submission is placed on a **priority queue**: contest submissions first, practice submissions next, and "run" requests in their own lane so debugging traffic cannot starve official judging.
+3. A judge worker takes the job, fetches the problem's test cases (cached locally on the worker) and runs the code in a sandbox.
+4. The worker publishes progress and the final verdict. The client receives updates over a WebSocket or server-sent events, falling back to polling.
+
+Workers acknowledge a job only after writing the verdict, so a crashed worker's job is redelivered. Judging is deterministic, so rerunning it is safe.
+
+## Sandboxing untrusted code
+
+Defense in depth is essential: each layer assumes the others might fail.
+
+<Slides title="Layers of the sandbox">
+<Slide caption="1. Isolation boundary: each execution runs in a fresh container with a hardened runtime, or in a lightweight micro-VM for stronger isolation.">
+
+```mermaid
+flowchart LR
+  W["Judge worker"] --> VM["Micro-VM or hardened container"] --> P["User process"]
+```
+
+</Slide>
+<Slide caption="2. Resource limits: CPU time, wall time, memory, process count, output size and file size are capped with cgroups and rlimits.">
+
+```mermaid
+flowchart LR
+  P["User process"] --> L["cgroups and rlimits: CPU, memory, pids, file size"]
+```
+
+</Slide>
+<Slide caption="3. Restrictions: no network, a read-only file system except a small scratch directory, a non-root user and a syscall filter that blocks dangerous calls.">
+
+```mermaid
+flowchart LR
+  P["User process"] --> N["No network"]
+  P --> F["Read-only FS, tmp scratch"]
+  P --> S["Seccomp syscall filter"]
+```
+
+</Slide>
+<Slide caption="4. Disposal: the environment is destroyed after each submission, so nothing persists between users.">
+
+```mermaid
+flowchart LR
+  Done["Verdict produced"] --> Destroy["Destroy sandbox"] --> Fresh["Next job gets a fresh sandbox"]
+```
+
+</Slide>
+</Slides>
+
+Pools of pre-warmed sandboxes, with language runtimes already loaded, keep start-up overhead low. Compilation also runs inside the sandbox, because compilers can be abused too.
+
+## Fair measurement
+
+Time limits are measured as **CPU time** of the user process, not wall-clock time, which is affected by other load. Workers run on dedicated cores (pinned, with no overcommit) and the same hardware class, so results are consistent. Many judges run each test a second time if it lands close to the limit, and apply per-language multipliers for slower runtimes.
+
+## Handling contest spikes
+
+- **Autoscale** the worker pool ahead of scheduled contests, since start times are known.
+- **Prioritize** contest submissions and throttle practice runs during contests.
+- **Show queue position** so users see progress rather than an unexplained wait.
+- **Stop early**: judging stops at the first failed test, saving time for wrong answers.
+
+## Leaderboard
+
+Contest standings rank users by problems solved, then by penalty time. The leaderboard service updates a **sorted set** in an in-memory store when a verdict arrives, keyed by a composite score, so ranks and top-N pages are fast. Near the end of contests, many platforms **freeze** the public leaderboard, which also reduces read load.
+
+<KeyTakeaways>
+- Execution capacity is the dominant resource; contests multiply load several times near deadlines.
+- Submissions are stored, queued by priority and judged asynchronously, with verdicts pushed to clients.
+- Sandboxes layer isolation, resource limits, no network, read-only file systems, syscall filters and disposal.
+- CPU-time limits on dedicated, uniform hardware make verdicts fair and reproducible.
+- Pre-scaled workers, prioritized queues and sorted-set leaderboards handle contest traffic.
+</KeyTakeaways>

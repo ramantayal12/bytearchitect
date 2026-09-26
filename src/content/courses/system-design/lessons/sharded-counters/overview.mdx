@@ -1,0 +1,57 @@
+---
+title: Designing Sharded Counters
+---
+
+A celebrity posts a photo, and within a minute a million people tap “like.” Each tap must increment the photo's like count. If that count is a single row in a database, every increment contends for the same row lock, and the database can process only a few thousand updates per second on it. Requests pile up, latency soars and the database struggles — all because of one very **hot** value. **Sharded counters** solve this problem.
+
+## Where hot counters appear
+
+- Likes, views, shares and reactions on viral content.
+- Follower counts of very popular accounts.
+- Real-time vote tallies and live event metrics.
+- Rate limits and quotas shared by many servers.
+- Inventory counts during flash sales.
+
+## The core idea
+
+Instead of one counter, keep **N sub-counters** (shards). Each increment goes to one shard, chosen at random or by hashing. Reading the total means **summing** all shards.
+
+```mermaid
+flowchart LR
+  L1[Like] & L2[Like] & L3[Like] & L4[Like] --> R{"pick shard"}
+  R --> S1["shard 1: 2,410"] & S2["shard 2: 2,388"] & S3["shard 3: 2,402"] & S4["shard 4: 2,395"]
+  S1 & S2 & S3 & S4 --> SUM["total = 9,595"]
+```
+
+With `N` shards, write contention per shard drops by a factor of `N`, and shards can live on different machines, multiplying total write throughput.
+
+## Requirements
+
+### Functional
+
+- **Create** a counter for any entity (post, video, account).
+- **Increment** (and sometimes decrement) the counter.
+- **Read** the counter's current value.
+
+### Non-functional
+
+- **High write throughput** — sustain very high increment rates on a single counter.
+- **Low latency** for both writes and reads.
+- **Scalability** — billions of counters, most of them cold.
+- **Availability** — counts should keep working during partial failures.
+- **Eventual accuracy** — displayed counts may lag slightly, but must converge to the correct total without losing increments.
+
+## Alternatives we will not use
+
+Simply caching the counter in memory and writing to the database occasionally reduces load but risks losing increments on crashes. Using a strongly consistent distributed transaction per increment is safe but far too slow for hot counters. Sharding keeps increments durable while spreading them out, and it combines naturally with caching for reads.
+
+<Callout type="note">
+Most users cannot tell whether a post has 1,203,412 or 1,203,587 likes — displays often round to “1.2M.” This tolerance for approximate, slightly delayed counts is what makes sharded and cached counting practical.
+</Callout>
+
+<KeyTakeaways>
+- A single hot counter creates heavy contention on one row or key.
+- Sharded counters split a counter into N sub-counters; writes go to one shard and reads sum all shards.
+- Sharding reduces per-shard contention and lets shards spread across machines.
+- Requirements: high write throughput, low latency, massive scale and eventual accuracy.
+</KeyTakeaways>

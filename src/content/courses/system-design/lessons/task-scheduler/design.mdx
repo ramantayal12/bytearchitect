@@ -1,0 +1,98 @@
+---
+title: Design of a Distributed Task Scheduler
+---
+
+Let's design the scheduler's components and follow a task from submission to completion.
+
+## Components
+
+```mermaid
+flowchart LR
+  C[Clients] --> API[Scheduler API]
+  API --> DB[("Task store<br/>(partitioned DB)")]
+  SCH["Scheduler workers<br/>(partitioned)"] --> DB
+  SCH --> PQ[["Priority queues<br/>high · normal · batch"]]
+  PQ --> EX["Executors / worker pool"]
+  EX --> DB
+  RM[Resource manager] -.-> EX
+  EX --> RES[(Results & logs)]
+```
+
+- **Scheduler API** — validates and authenticates submissions, applies quotas and writes tasks to the task store.
+- **Task store** — a durable, partitioned database holding each task's spec, state, next run time and attempt history. It is the source of truth.
+- **Scheduler workers** — each owns a subset of task-store partitions; they find tasks whose run time has arrived and enqueue them.
+- **Priority queues** — durable queues separating urgent tasks from normal and batch work.
+- **Executors** — workers that pull tasks from queues, run them in isolated environments (such as containers) and report results.
+- **Resource manager** — tracks worker capacity and places resource-heavy tasks (for example, GPU jobs) on suitable machines.
+
+## Finding due tasks efficiently
+
+Scanning all tasks to see which are due would be slow. Instead, the task store keeps an index on `next_run_time`, partitioned by task ID:
+
+```text
+SELECT task_id FROM tasks
+WHERE partition = :p AND state = 'SCHEDULED' AND next_run_time <= now()
+ORDER BY next_run_time LIMIT 1000
+```
+
+Each scheduler worker polls only its own partitions every second or so. For recurring tasks, after enqueuing an occurrence, the worker computes and stores the **next** run time in the same transaction.
+
+An alternative for delayed tasks is a **timing wheel** or time-bucketed queue: tasks are grouped by minute, and at each minute the corresponding bucket is moved to the ready queue.
+
+## Execution flow
+
+<Slides title="Running a task">
+<Slide caption="1. A scheduler worker finds a due task and atomically moves it from Scheduled to Queued.">
+
+```mermaid
+sequenceDiagram
+  participant S as Scheduler worker
+  participant DB as Task store
+  S->>DB: UPDATE state=QUEUED WHERE id=42 AND state=SCHEDULED
+  DB-->>S: 1 row updated
+```
+
+</Slide>
+<Slide caption="2. It enqueues the task into the queue for its priority.">
+
+```mermaid
+flowchart LR
+  S[Scheduler worker] -->|task 42| PQ[["high-priority queue"]]
+```
+
+</Slide>
+<Slide caption="3. An executor pulls the task, marks it Running with a lease, and runs it.">
+
+```mermaid
+sequenceDiagram
+  participant E as Executor
+  participant DB as Task store
+  E->>DB: state=RUNNING, lease until +60 s
+  Note over E: executes handler
+```
+
+</Slide>
+<Slide caption="4. On success it records the result; on failure it schedules a retry with backoff.">
+
+```mermaid
+flowchart LR
+  E[Executor] -->|success| OK["state=SUCCEEDED"]
+  E -->|failure| RT["state=SCHEDULED<br/>next_run = now + backoff"]
+```
+
+</Slide>
+</Slides>
+
+The **conditional update** in step 1 (only if still `SCHEDULED`) ensures that two scheduler workers cannot enqueue the same occurrence, even during partition reassignment.
+
+## Leases and heartbeats
+
+An executor holds a **lease** on a running task and extends it with periodic heartbeats. If the executor crashes, the lease expires, and a recovery process returns the task to `SCHEDULED` for retry. Long-running tasks heartbeat more often and may also **checkpoint** progress so that retries resume rather than restart.
+
+<KeyTakeaways>
+- The API writes tasks to a durable, partitioned task store — the source of truth.
+- Partitioned scheduler workers find due tasks using a next-run-time index and enqueue them.
+- Priority queues separate urgent, normal and batch work; executors run tasks in isolation.
+- Conditional state transitions prevent duplicate enqueuing.
+- Leases with heartbeats detect crashed executors so tasks can be retried; checkpoints help long tasks.
+</KeyTakeaways>

@@ -1,0 +1,65 @@
+---
+title: Requirements of a Video Platform
+---
+
+Before drawing any boxes, we pin down what the platform must do and how big it must be. This lesson covers the **Scope** and **Capacity** steps of SCALED.
+
+## Functional requirements
+
+In scope:
+
+- **Upload:** a signed-in creator uploads a video with a title, description and tags.
+- **Watch:** anyone can stream a video on web, mobile or TV, with quality adapting to their connection.
+- **Search:** viewers find videos by title, description and tags.
+- **Engagement:** viewers can like, dislike and comment on videos; view counts are displayed.
+- **Channels:** each creator has a channel page listing their videos.
+
+Out of scope for the core design: recommendations, live streaming, advertising, monetization, copyright matching and moderation. We will mention where they plug in.
+
+## Non-functional requirements
+
+- **High availability for playback.** Watching should work even when parts of the system fail. We favor availability over strong consistency for most reads.
+- **Low latency.** Playback should start in under two seconds and should not rebuffer.
+- **Durability.** An uploaded video must never be lost.
+- **Scalability.** The system must handle growth in both catalog size and views, including viral spikes.
+- **Eventual consistency is acceptable** for view counts, likes and search results. A new video appearing in search a minute after publishing is fine.
+
+## Capacity estimation
+
+We assume the following numbers, chosen to be round and easy to reason about:
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 500 million |
+| Videos watched per user per day | 5 |
+| Upload-to-view ratio | 1 : 500 |
+| Average video length | 5 minutes |
+| Average source size | 50 MB per minute |
+| Average streamed bitrate | about 2.5 Mbps (roughly 19 MB per minute) |
+
+**Views:** 500 million × 5 = 2.5 billion views per day, or roughly 29,000 views per second on average. Peak traffic is often two to three times the average, so we plan for around 90,000 views per second.
+
+**Uploads:** 2.5 billion divided by 500 is 5 million uploads per day, or about 58 per second.
+
+**Raw storage per day:** 5 million × 5 minutes × 50 MB = 1.25 PB per day of source footage. Many platforms keep the original, so this grows quickly.
+
+**Encoded storage:** each video is encoded into several resolutions and codecs. A reasonable rule of thumb is that the full ladder takes roughly the same space as the compressed source, so budget another petabyte or so per day. Replication for durability, typically three copies or erasure coding with around 1.5× overhead, multiplies the total.
+
+**Egress bandwidth:** if the average view watches half the video, that is 2.5 minutes × 19 MB × 2.5 billion views, roughly 120 PB per day, or about 11 terabits per second on average. No single data center can serve that; it must come from CDN edges spread across the world.
+
+<Callout type="note">
+The exact numbers matter less than the conclusions they force: storage grows by petabytes per day, so it must be a scalable blob store; bandwidth is tens of terabits per second, so a CDN is mandatory; uploads are only dozens per second, so the upload API itself is not the bottleneck, but encoding them is.
+</Callout>
+
+## Server estimation
+
+Metadata requests, such as loading the watch page, fetching comments and recording views, might total ten per view, so around 900,000 requests per second at peak. If one application server handles roughly 1,000 to 2,000 requests per second, we need several hundred to a thousand servers for the API tier, spread across regions.
+
+Encoding is CPU-heavy. If encoding one minute of video into the full ladder takes around two CPU-minutes, then 5 million uploads × 5 minutes × 2 CPU-minutes is 50 million CPU-minutes per day, or about 35,000 CPU cores busy around the clock. This is why encoding runs on a large, elastic worker fleet fed by a queue.
+
+<KeyTakeaways>
+- Scope the core features: upload, watch, search, engagement and channels; defer recommendations and live video.
+- Playback needs high availability and low latency; durability is non-negotiable for uploads; engagement data can be eventually consistent.
+- Estimates show petabytes of new storage per day and tens of terabits per second of egress, which forces a blob store and a CDN.
+- Uploads are few per second, but encoding them needs tens of thousands of CPU cores, so encoding must be asynchronous and elastic.
+</KeyTakeaways>

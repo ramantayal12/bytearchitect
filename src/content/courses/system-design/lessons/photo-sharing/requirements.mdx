@@ -1,0 +1,67 @@
+---
+title: Requirements of a Photo-Sharing Service
+---
+
+This lesson defines the scope of the photo-sharing service and estimates its storage and bandwidth needs.
+
+## Functional requirements
+
+- **Upload:** users post one or more photos with a caption, optional location and tags.
+- **Follow:** users follow other accounts; accounts can be public or private.
+- **Feed:** users see a personalized feed of posts from accounts they follow, plus some recommended posts.
+- **Profile:** each user has a grid of their posts.
+- **Engage:** users like and comment on posts.
+- **Search:** users find accounts and hashtags.
+
+Out of scope: stories, direct messages, short videos, shopping and advertising.
+
+## Non-functional requirements
+
+- **Low latency:** the feed should load quickly, and images should appear as the user scrolls to them.
+- **High availability:** viewing must keep working even if uploads are degraded.
+- **Durability:** uploaded photos must never be lost.
+- **Eventual consistency:** a new post may take a few seconds to appear in followers' feeds; like counts can lag.
+- **Privacy:** posts from private accounts are only visible to approved followers, and location metadata in files is stripped unless the user chooses to share a location.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 500 million |
+| New photos per day | 100 million |
+| Average original photo size | 3 MB |
+| Variants per photo | 4 (thumbnail, small, medium, large) totaling about 1 MB |
+| Feed views per user per day | 10, each showing about 20 posts |
+| Read-to-write ratio for photos | well over 100:1 |
+
+**Upload rate:** 100 million ÷ 86,400 ≈ 1,160 photos per second on average, perhaps 3,500 per second at peak.
+
+**Storage per day:**
+
+- Originals: 100 million × 3 MB = 300 TB per day.
+- Variants: 100 million × 1 MB = 100 TB per day.
+- Total: about 400 TB per day, roughly 146 PB per year before replication. With erasure coding at about 1.5× overhead, around 220 PB per year of raw capacity.
+
+This is the dominant cost of the system, which motivates the storage tiering in the detailed design.
+
+**Metadata:** each post has a record of about 1 KB (IDs, caption, location, variant keys, timestamps), so 100 GB per day. Likes and comments add more but remain small compared with media.
+
+**Read bandwidth:** 500 million users × 10 feed views × 20 images = 100 billion image views per day. If the average variant served is 150 KB, that is 15 PB per day, or roughly 1.4 Tbps on average. This must be served by CDNs.
+
+**Feed requests:** 5 billion per day, about 58,000 per second average and perhaps 150,000 per second at peak.
+
+<Callout type="note">
+Two numbers drive the design: hundreds of terabytes of new storage every day and over a terabit per second of image delivery. The first motivates efficient formats and tiered storage; the second requires CDNs and small variants.
+</Callout>
+
+## Server estimation
+
+At 150,000 feed requests per second at peak and about 1,000 per server, the feed service needs about 150 servers plus headroom. Image processing at 3,500 uploads per second, if each upload takes about 200 ms of CPU to produce all variants, needs around 700 CPU cores busy at peak, provided by an autoscaled worker fleet.
+
+<KeyTakeaways>
+- Core features are uploading, following, a personalized feed, profiles, likes, comments and search.
+- Viewing must be fast and highly available; posts and counts can be eventually consistent.
+- New media storage is hundreds of terabytes per day, the dominant cost.
+- Image delivery exceeds a terabit per second, requiring CDNs and small variants.
+- Image processing needs an autoscaled worker fleet of hundreds of cores at peak.
+</KeyTakeaways>

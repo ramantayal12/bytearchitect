@@ -1,0 +1,53 @@
+---
+title: 'System Design: Proximity Service'
+---
+
+A proximity service answers one question at enormous scale: **what is near this point?** Review and discovery apps use it to list restaurants within a kilometer, ride-hailing apps to find nearby drivers, and dating or social apps to find people close by. In this chapter we design a Yelp-like service for discovering businesses near a user, and we examine the spatial indexing techniques that make "nearby" queries fast.
+
+## Why nearby search is not trivial
+
+Suppose each business is stored with its latitude and longitude. The obvious query is:
+
+```sql
+SELECT * FROM business
+WHERE lat BETWEEN :lat - :d AND :lat + :d
+  AND lng BETWEEN :lng - :d AND :lng + :d;
+```
+
+With an index on `lat` and another on `lng`, the database can use only one index efficiently. It finds all businesses in a thin horizontal band around the world, then filters them by longitude. With hundreds of millions of businesses, that band contains far too many rows. A composite index on (lat, lng) has the same problem, because a B-tree orders data along one dimension at a time.
+
+The underlying issue is that **two-dimensional proximity does not map naturally onto one-dimensional indexes**. The solutions in this chapter, such as geohashes, quadtrees and cell-based systems like S2 or H3, all map 2D space into structures that keep nearby points together.
+
+```mermaid
+flowchart LR
+  Q["Query: businesses within 1 km"] --> Idx["Spatial index: which cells overlap the circle?"]
+  Idx --> Cells["A handful of cells"]
+  Cells --> Cand["Candidate businesses"]
+  Cand --> Filter["Exact distance filter and ranking"]
+  Filter --> R["Results"]
+```
+
+## Characteristics of the workload
+
+- **Read-heavy.** Users search far more often than businesses are added or edited. A new business appearing in search results a few minutes later is fine.
+- **Static data.** Businesses rarely move. This makes it practical to build spatial indexes offline and keep them in memory. (Moving objects, such as drivers, are a different problem that we tackle in the ride-hailing chapter.)
+- **Uneven density.** A square kilometer of a city center may contain thousands of businesses, while a square kilometer of countryside contains none. A good index adapts to density.
+- **Latency-sensitive.** Results must appear as the user pans the map or changes filters.
+
+## What this chapter covers
+
+1. **Requirements:** features, scale and estimates.
+2. **Design:** API, data model and the high-level architecture separating the business service from the location-based service.
+3. **Design considerations:** geohashes and quadtrees in depth, including how to handle boundaries, dense areas and updates.
+
+<Callout type="interview">
+When asked to design a proximity service, get to the indexing question quickly. Interviewers want to hear why a plain latitude and longitude index fails and how a geohash or quadtree solves it.
+</Callout>
+
+<KeyTakeaways>
+- A proximity service answers "what is near this point?" for discovery, ride-hailing and social apps.
+- Separate B-tree indexes on latitude and longitude cannot efficiently answer 2D range queries.
+- Spatial indexes such as geohashes, quadtrees, S2 and H3 map 2D space into structures that keep nearby points together.
+- Business data is read-heavy and mostly static, so spatial indexes can be built offline and held in memory.
+- Density varies enormously between cities and rural areas, so the index should adapt to it.
+</KeyTakeaways>

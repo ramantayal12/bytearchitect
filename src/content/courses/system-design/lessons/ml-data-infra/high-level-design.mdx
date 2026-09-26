@@ -1,0 +1,78 @@
+---
+title: High-Level Design of ML Data Infrastructure
+---
+
+This lesson designs the main layers of an ML data platform for a large consumer company: ingestion, storage, processing, a feature store and dataset management.
+
+## Requirements and scale
+
+- **Functional:** ingest events and database changes; store raw and processed data; let users define features once and use them for training and serving; build versioned datasets; serve features online with low latency; track lineage from raw data to model.
+- **Non-functional:** petabyte-scale storage, high-throughput batch processing, online feature reads in under 10 ms at hundreds of thousands of requests per second, reproducibility, and privacy compliance.
+- **Estimates:** 50 billion events per day at 1 KB each is 50 TB per day of raw events, around 18 PB per year before compression. Online feature lookups might peak at 500,000 per second across all models.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph Ingestion
+    Apps["Apps and services"] --> Stream["Event stream"]
+    DBs["Operational DBs"] --> CDC["Change data capture"] --> Stream
+    Docs["Documents and media"] --> Batch["Batch loaders"]
+  end
+  Stream --> Lake[("Data lake: object storage, open table format")]
+  Batch --> Lake
+  Lake --> Compute["Batch processing engines"]
+  Stream --> SProc["Stream processors"]
+  subgraph FS["Feature store"]
+    Registry[("Feature registry: definitions, owners")]
+    Offline[("Offline store: historical feature values")]
+    Online[("Online store: latest values, low latency")]
+  end
+  Compute --> Offline
+  Compute -->|materialize| Online
+  SProc --> Online
+  SProc --> Offline
+  Offline --> DS["Dataset builder (point-in-time joins)"] --> Versions[("Versioned datasets")]
+  Versions --> Train["Training cluster"]
+  Online --> Serving["Model serving"]
+  Catalog["Data catalog, lineage, access control"] -.-> Lake
+```
+
+### Ingestion
+
+Application events flow into a partitioned **event stream**. Database changes are captured with **change data capture**, which turns inserts and updates into events, so analytics never query production databases directly. Documents, images and other unstructured data arrive through batch loaders. Every record gets an event time, a source and a schema version.
+
+### Storage layers
+
+The **data lake** stores data in columnar files on object storage, organized with an **open table format** that adds transactions, schema evolution and snapshots. Data is typically organized in layers:
+
+- **Raw (bronze):** immutable data as received.
+- **Cleaned (silver):** validated, deduplicated and joined.
+- **Curated (gold):** aggregated tables and features ready for use.
+
+Table snapshots allow queries "as of" a past version, which underpins reproducibility.
+
+### Processing
+
+Batch engines run large transformations, such as daily aggregates, joins and dataset builds. Stream processors compute low-latency features, such as counts over the last five minutes, and write them to the online store. A workflow orchestrator schedules and monitors pipelines, with retries and data quality checks between steps.
+
+### Feature store
+
+The feature store is the heart of the platform. Features are **defined once** in a registry, including their source, transformation, entity key (such as user ID) and freshness requirements. The platform then computes them into two stores:
+
+- The **offline store** keeps the full history of feature values with timestamps, used to build training datasets.
+- The **online store**, a low-latency key-value database, keeps the latest value per entity for serving.
+
+Because both are computed from the same definition, training and serving see consistent values, preventing skew.
+
+### Datasets and lineage
+
+The dataset builder joins labels with historical feature values **as of each label's timestamp** and writes a versioned dataset referencing the exact table snapshots used. A catalog records lineage (which sources, code versions and parameters produced each dataset and model) and enforces access control.
+
+<KeyTakeaways>
+- Events and database changes flow through a stream; documents arrive via batch loaders.
+- A data lake on object storage with an open table format provides layered, snapshot-capable storage.
+- Batch and stream processing produce features and datasets, orchestrated with quality checks.
+- A feature store defines features once and materializes them into offline and online stores, preventing skew.
+- Versioned datasets built with point-in-time joins, plus lineage tracking, make training reproducible.
+</KeyTakeaways>

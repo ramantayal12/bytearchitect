@@ -1,0 +1,61 @@
+---
+title: 'System Design: Collaborative Editing'
+---
+
+A collaborative editor lets several people edit the same document at the same time and see each other's changes, cursors and comments within a fraction of a second. It feels simple, as if everyone were typing into one shared text box, but it hides one of the most subtle problems in distributed systems: **keeping replicas of a document consistent when everyone edits concurrently**.
+
+## The core problem
+
+Each user edits a local copy of the document, because waiting for a server round trip on every keystroke would make typing unbearable. Edits are then sent to others. When two users edit the same region at the same time, their edits were made against different versions of the document, and naively applying them can produce different results on different screens.
+
+```mermaid
+sequenceDiagram
+  participant A as Alice, doc is cat
+  participant B as Bob, doc is cat
+  A->>A: insert s at position 3, doc becomes cats
+  B->>B: delete position 0, doc becomes at
+  A->>B: insert s at 3
+  B->>B: position 3 is past the end of at
+  B->>A: delete at 0
+  A->>A: doc becomes ats
+  Note over A,B: Positions shift as concurrent edits apply, so naive replay diverges or fails
+```
+
+In the example, Bob receives an insertion at position 3, but his document is now only two characters long. Worse, in other cases both sides may apply the edits without errors but end up with different text, and neither realizes it. The editor must guarantee **convergence**: once everyone has received all edits, every copy is identical, and each user's **intention** is preserved.
+
+Two families of algorithms solve this:
+
+- **Operational transformation (OT)** transforms incoming operations against concurrent ones so they apply correctly.
+- **Conflict-free replicated data types (CRDTs)** give every character a unique, ordered identity so that operations commute naturally.
+
+The concurrency lesson compares them in depth.
+
+## Beyond text
+
+Real editors also handle:
+
+- **Rich text and structure:** formatting, headings, tables, images and embedded objects.
+- **Presence:** each collaborator's cursor and selection, shown live.
+- **Comments and suggestions** anchored to text ranges that move as the text changes.
+- **Version history:** browsing and restoring earlier versions.
+- **Offline editing:** editing on a plane and merging when back online.
+- **Permissions:** owners, editors, commenters and viewers.
+
+## Chapter plan
+
+1. **Requirements:** features, scale and latency goals.
+2. **Design:** the architecture of document sessions, storage and real-time sync.
+3. **Concurrency:** OT versus CRDTs, with examples.
+4. **Evaluation:** how the design holds up and where its trade-offs lie.
+
+<Callout type="interview">
+In a collaborative editing interview, show that you understand why naive "last write wins" or locking does not work for keystroke-level collaboration, then explain one of OT or CRDTs clearly.
+</Callout>
+
+<KeyTakeaways>
+- Collaborative editors apply edits locally first, then share them, so concurrent edits are the norm.
+- Naively replaying position-based edits can fail or make copies diverge silently.
+- Editors must guarantee convergence of all copies while preserving each user's intention.
+- Operational transformation and CRDTs are the two main solutions.
+- Rich text, presence, comments, history, offline editing and permissions add further complexity.
+</KeyTakeaways>

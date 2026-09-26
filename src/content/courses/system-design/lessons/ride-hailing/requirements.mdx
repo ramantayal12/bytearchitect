@@ -1,0 +1,68 @@
+---
+title: Requirements of a Ride-Hailing Service
+---
+
+This lesson defines the scope of the ride-hailing service and estimates its load.
+
+## Functional requirements
+
+**Riders can:**
+
+- see nearby available drivers on a map before requesting;
+- request a ride from a pickup to a destination and see an upfront price estimate;
+- be matched with a driver, see the driver's details and watch the car approach;
+- cancel a ride, pay automatically at the end and rate the driver.
+
+**Drivers can:**
+
+- go online and offline and share their location while online;
+- receive trip offers and accept or decline them within a few seconds;
+- navigate to pickup and destination, and see their earnings.
+
+Out of scope: shared or pooled rides, scheduled rides, driver onboarding and background checks, and customer support tooling.
+
+## Non-functional requirements
+
+- **Low latency:** a rider should be matched within a few seconds; location updates should appear on the other party's map within a second or two.
+- **High availability:** an outage strands riders and costs drivers income. The request and matching path must be highly available.
+- **Consistency where it matters:** a driver must never be assigned to two trips, and payments must be exactly right. Elsewhere, such as the nearby-cars map, eventual consistency is fine.
+- **Scalability:** the service must handle city-level peaks, such as after concerts or during storms.
+- **Reliability of payments:** no double charges and no lost payments, even under retries and failures.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Monthly active riders | 100 million |
+| Daily trips | 20 million |
+| Drivers online at peak | 3 million |
+| Driver location update interval | every 4 seconds |
+| Riders with the app open at peak | 10 million, each polling nearby cars |
+
+**Location updates:** 3 million drivers ÷ 4 seconds = 750,000 updates per second at peak. Each update carries driver ID, coordinates, heading, speed and timestamp, about 100 bytes, so roughly 75 MB per second of ingest.
+
+**Trip requests:** 20 million trips per day is about 230 per second on average. Peaks can be five times higher, so plan for over 1,000 requests per second, each triggering a nearby-driver search and several offers.
+
+**Nearby-car views:** if riders with the app open refresh nearby cars every 5 seconds, 10 million ÷ 5 = 2 million queries per second at peak. This read path does not need perfect freshness and can be served from an approximate, cached view per area.
+
+**Storage:** trip records of about 2 KB each, 20 million per day, is 40 GB per day, roughly 15 TB per year. Location history for completed trips, such as a sampled route polyline, adds more but can be compressed and moved to cold storage.
+
+<Callout type="note">
+Notice the asymmetry: trip requests are only hundreds to thousands per second, but location updates are hundreds of thousands per second and nearby-car views millions. The hard scaling problem is locations, not trips.
+</Callout>
+
+## Bandwidth and connections
+
+With a few million drivers and riders connected at peak, the service maintains millions of long-lived connections, such as WebSockets or MQTT sessions, to push offers and updates. These are spread across a fleet of connection gateway servers, each holding perhaps 50,000 to 100,000 connections.
+
+## Geographic partitioning
+
+Trips are local: a rider in one city is never matched with a driver in another. This makes **city or region** a natural partition key for location data and matching, which limits the blast radius of failures and lets each region scale independently.
+
+<KeyTakeaways>
+- Riders request, track and pay for trips; drivers share location and accept offers.
+- Matching must be fast and must never double-assign a driver; payments must be exact.
+- Location updates reach hundreds of thousands per second, and nearby-car views millions, far more than trip requests.
+- Millions of long-lived connections are needed to push offers and live locations.
+- Trips are local, so city or region is a natural partition key for locations and matching.
+</KeyTakeaways>

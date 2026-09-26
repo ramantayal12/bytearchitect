@@ -1,0 +1,95 @@
+---
+title: High-Level Design of Typeahead
+---
+
+This lesson lays out the API and the two halves of the typeahead system: the serving path that answers prefix queries and the data pipeline that keeps suggestions current.
+
+## API
+
+```http
+GET /v1/suggestions?prefix=how%20to%20b&lang=en&region=US&limit=8
+    -> { prefix: "how to b", suggestions: ["how to boil eggs", "how to budget", ...] }
+```
+
+The request is a simple, idempotent GET, which makes it cacheable by the browser, intermediate proxies and the CDN when the response is not personalized.
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph Online["Online serving path"]
+    Client["Browser / app"] --> CDN["CDN (short prefixes, popular prefixes)"]
+    CDN --> LB["Load balancer"]
+    LB --> Sugg["Suggestion servers (in-memory tries)"]
+  end
+  subgraph Offline["Offline data pipeline"]
+    Search["Search service"] --> Logs["Query log stream"]
+    Logs --> Agg["Aggregators: counts per query per window"]
+    Agg --> Freq[("Query frequency table")]
+    Freq --> Build["Trie builder + filters"]
+    Build --> Snap[("Trie snapshots in blob store")]
+  end
+  Snap --> Sugg
+```
+
+### Online serving path
+
+Suggestion servers load a **trie snapshot** into memory at start-up and whenever a new snapshot is published. For each request, the server walks the trie to the node for the prefix and returns the precomputed top suggestions stored at that node. No computation over the subtree happens at request time, so the lookup costs time proportional only to the prefix length.
+
+Servers are stateless apart from the read-only snapshot, so they scale by adding replicas. A new snapshot is loaded in the background and swapped in atomically, so requests never see a half-built trie.
+
+### Offline data pipeline
+
+<Slides title="From searches to suggestions">
+<Slide caption="1. Every submitted search is logged with its language, region and timestamp to a stream.">
+
+```mermaid
+flowchart LR
+  S["Search service"] --> L["Query log stream"]
+```
+
+</Slide>
+<Slide caption="2. Aggregators count queries per time window and maintain decayed frequencies, weighting recent days more heavily.">
+
+```mermaid
+flowchart LR
+  L["Query logs"] --> A["Windowed counts"] --> F[("Frequency table: query, lang, region, score")]
+```
+
+</Slide>
+<Slide caption="3. The builder filters unsafe or rare queries, builds tries per language and region, and computes the top suggestions at every node.">
+
+```mermaid
+flowchart LR
+  F[("Frequencies")] --> Filt["Safety and quality filters"] --> B["Build trie, precompute top k"] --> Snap[("Snapshot")]
+```
+
+</Slide>
+<Slide caption="4. Servers download the snapshot and swap it in atomically.">
+
+```mermaid
+flowchart LR
+  Snap[("Snapshot")] --> S1["Suggestion server 1"]
+  Snap --> S2["Suggestion server 2"]
+```
+
+</Slide>
+</Slides>
+
+**Frequency with decay.** Counting all-time frequency would let old queries dominate forever. Instead, scores decay over time, for example by multiplying by a factor such as 0.9 each day and adding the day's count, so recent popularity weighs more.
+
+**Filtering.** Queries appearing only a handful of times are dropped: they add little value and could leak private information, such as someone searching their own address. Blocklists and classifiers remove offensive or dangerous completions. A **fast removal** channel lets operators suppress a suggestion immediately, by pushing a small override list to servers without waiting for the next snapshot.
+
+**Build frequency.** Rebuilding the full trie takes minutes to an hour, so it runs perhaps daily or hourly. For trending topics, a smaller, fast-updating **trending trie** built from the last hour of queries can be merged with the main trie's results at serving time.
+
+## Caching
+
+Short prefixes are requested constantly: every query starts with one of a few dozen characters. The responses for all one- and two-character prefixes can be precomputed and served from the CDN or even bundled into the client. Popular longer prefixes also have high cache hit rates at the CDN with a short time-to-live. The browser caches responses for the session, so backspacing is instant.
+
+<KeyTakeaways>
+- The API is a cacheable GET that returns the top suggestions for a prefix, language and region.
+- Suggestion servers answer from an in-memory trie with precomputed top suggestions per node, swapped in atomically.
+- An offline pipeline logs searches, aggregates decayed frequencies, filters unsafe or rare queries and builds trie snapshots.
+- A small trending trie and a fast removal channel cover freshness and safety between full rebuilds.
+- CDN and browser caching absorb short and popular prefixes.
+</KeyTakeaways>

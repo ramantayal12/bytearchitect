@@ -1,0 +1,60 @@
+---
+title: Requirements of an AI Code Assistant
+---
+
+An AI code assistant lives inside a developer's editor. It suggests the rest of a line or function as the developer types (inline completion), answers questions about the codebase in a chat panel, and can make multi-file edits on request. Its value depends on two things that pull in opposite directions: suggestions must be **fast**, appearing within a fraction of a second, and they must be **relevant**, which requires understanding context from a codebase that can contain millions of lines.
+
+## Functional requirements
+
+- **Inline completion:** as the developer types, show a suggested continuation, accepted with a keystroke.
+- **Chat:** answer questions about code, explain errors and propose changes, grounded in the repository.
+- **Edits:** apply multi-line or multi-file changes the developer requests, shown as a diff to review.
+- **Context awareness:** use the current file, open files, related symbols and relevant parts of the repository.
+- **Organization controls:** administrators set policies, such as which repositories can be used as context and whether code may leave the company's region.
+
+Out of scope: autonomous agents that run for hours, code review bots and training custom models on customers' code.
+
+## Non-functional requirements
+
+- **Very low latency for completions:** suggestions within roughly 200 to 500 ms of the developer pausing; stale suggestions are worthless once they keep typing.
+- **Relevance:** suggestions that compile and match the project's conventions, APIs and style.
+- **Privacy and security:** customer code is sensitive intellectual property. It must be encrypted in transit, not retained beyond what is needed, never used to train models without consent and isolated between organizations.
+- **Availability:** failures must degrade quietly; the editor must never freeze waiting for the assistant.
+- **Cost:** completions are extremely frequent, so each must be cheap.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Active developers per day | 5 million |
+| Completion requests per developer per day | 500 (after client-side debouncing) |
+| Prompt size per completion | about 1,500 tokens of context |
+| Completion output | about 30 tokens |
+| Chat requests per developer per day | 20, with about 8,000 input and 500 output tokens |
+
+**Completions:** 5 million × 500 = 2.5 billion per day, about 29,000 per second on average and perhaps 80,000 per second during working-hour peaks across time zones.
+
+**Completion tokens:** input about 2.5 billion × 1,500 = 3.75 trillion tokens per day; output 75 billion. The workload is dominated by prefill of context, while each output is short, so time to first token is essentially the whole latency.
+
+**Chat:** 100 million requests per day with 8,000 input tokens is 800 billion input tokens, plus 50 billion output tokens. Chat is less frequent but each request is much larger.
+
+**Codebase indexing:** if the assistant indexes repositories for retrieval, a large organization might have 50,000 repositories totaling a few billion lines. Chunked and embedded, this means hundreds of millions of vectors across all customers, updated continuously as code changes.
+
+<Callout type="note">
+Completions and chat are two different workloads. Completions need small, fast models with aggressive latency optimization; chat and edits can use larger models, longer context and a few seconds of latency. Designing them as one service would compromise both.
+</Callout>
+
+## Measuring success
+
+- **Acceptance rate** of suggestions, and how much accepted code survives later edits.
+- **Latency percentiles** measured in the editor.
+- **Developer satisfaction** and task completion time in studies.
+- **Cost per active developer.**
+
+<KeyTakeaways>
+- A code assistant provides inline completions, repository-aware chat and multi-file edits inside the editor.
+- Completions must arrive within a few hundred milliseconds or become useless.
+- Customer code is sensitive, so privacy, isolation and retention limits are core requirements.
+- Completion traffic is huge and dominated by context prefill with short outputs; chat has larger prompts but lower frequency.
+- Completions and chat should be designed as separate workloads with different models and latency targets.
+</KeyTakeaways>
