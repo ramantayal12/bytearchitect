@@ -92,6 +92,27 @@ const getRenderer = () => (renderer ??= createMermaidRenderer({ launchOptions: l
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex').slice(0, 12)
 
+/**
+ * Each render opens a Chromium page and loads Mermaid into it. Vite transforms every lesson at
+ * once, so without a limit a cold build opens hundreds of pages and runs out of memory.
+ */
+const MAX_CONCURRENT_RENDERS = 4
+let activeRenders = 0
+const waitingRenders: (() => void)[] = []
+
+async function withRenderSlot<T>(render: () => Promise<T>): Promise<T> {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) activeRenders++
+  // A finished render hands its slot straight to the next waiting one.
+  else await new Promise<void>((resolve) => waitingRenders.push(resolve))
+  try {
+    return await render()
+  } finally {
+    const next = waitingRenders.shift()
+    if (next) next()
+    else activeRenders--
+  }
+}
+
 async function renderDiagram(source: string, theme: Theme): Promise<string> {
   const key = hash(`${CACHE_VERSION}:${theme}:${source}`)
   const cacheFile = path.join(CACHE_DIR, `${key}.svg`)
@@ -101,10 +122,9 @@ async function renderDiagram(source: string, theme: Theme): Promise<string> {
     // cache miss
   }
 
-  const [result] = await getRenderer()([source], {
-    prefix: `m${key}`,
-    mermaidConfig: THEMES[theme],
-  })
+  const [result] = await withRenderSlot(() =>
+    getRenderer()([source], { prefix: `m${key}`, mermaidConfig: THEMES[theme] }),
+  )
   if (!result || result.status === 'rejected') {
     const reason = result?.status === 'rejected' ? String(result.reason) : 'unknown error'
     throw new Error(reason)
