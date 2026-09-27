@@ -51,10 +51,33 @@ Money does not move instantly: an **authorization** reserves funds within second
 In a payment system interview, lead with correctness: "The top requirement is that we never double-charge or lose money, even when calls time out. Let's design for idempotency and reconciliation first, then scale."
 </Callout>
 
+## Keeping card numbers out of your systems
+
+Tokenization shrinks the scope of strict card-data compliance to the PSP:
+
+```mermaid
+sequenceDiagram
+  participant B as Customer browser
+  participant PSP as PSP (hosted fields)
+  participant M as Merchant backend
+  B->>PSP: card number entered in PSP-hosted field
+  PSP-->>B: token tok_9f1c (card number never leaves PSP)
+  B->>M: checkout with tok_9f1c
+  M->>PSP: charge tok_9f1c, amount, idempotency key
+  PSP-->>M: result
+```
+
+The merchant's servers only ever see a token that is useless outside the merchant's PSP account, so a breach of the merchant's database does not expose card numbers.
+
+<Ponder question="Why do payment systems record amounts as integers in the smallest currency unit rather than as floating-point numbers?">
+Floating-point numbers cannot represent most decimal fractions exactly: 0.1 + 0.2 is not exactly 0.3 in binary floating point. Across millions of transactions, fees and currency conversions, tiny rounding errors accumulate and the books stop balancing. Storing 1999 cents instead of 19.99 dollars, with explicit rounding rules for divisions such as fee splits, keeps every calculation exact.
+</Ponder>
+
 <KeyTakeaways>
 - Payment systems must be exactly right; correctness and auditability come before speed.
 - Card payments involve a PSP, card networks, issuing and acquiring banks, with authorization now and settlement later.
 - Pay-ins, pay-outs, refunds and chargebacks are the main flows.
 - Ambiguous failures, dangerous retries, multiple sources of truth and regulation make payments hard.
 - Idempotency, state machines, a double-entry ledger, reconciliation and tokenization are the core principles.
+- Tokenization keeps raw card numbers with the PSP, shrinking compliance scope and breach impact.
 </KeyTakeaways>

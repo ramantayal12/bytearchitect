@@ -45,9 +45,28 @@ Following SCALED, this chapter covers:
 Interviewers rarely want every feature. Scope aggressively in the first minutes: “I'll focus on upload, playback and search, and treat comments, recommendations and monetization as out of scope unless we have time.”
 </Callout>
 
+## A day in the life of one video
+
+Following one video end to end shows how many building blocks are involved:
+
+| Time | Event | Building blocks involved |
+| --- | --- | --- |
+| 10:00 | A creator uploads a 12-minute, 2 GB video from a phone | Load balancer, upload service, blob store (resumable chunks) |
+| 10:01 | The upload completes; an encoding job is queued | Messaging queue, task scheduler |
+| 10:01–10:06 | Workers transcode the video into 8 renditions in parallel and generate thumbnails | Worker fleet, blob store |
+| 10:06 | The video is marked ready and indexed for search | Metadata database, search index |
+| 10:07 | Subscribers get notified | Pub-sub, notification service |
+| 10:10 | 50,000 people start watching; segments are served from nearby edges | CDN, cache |
+| All day | Views, likes and comments pour in | Wide-column store, sharded counters |
+
+<Ponder question="Why is it acceptable for the upload path to take minutes when the watch path must start in under two seconds?">
+Uploads are rare, and creators understand that processing takes time; a progress indicator and a notification when the video is ready are enough. Viewers, by contrast, are numerous and impatient — each second of start-up delay measurably increases abandonment. The asymmetry lets the design spend time on the upload path (thorough encoding, checks) to make the watch path cheap and fast.
+</Ponder>
+
 <KeyTakeaways>
 - A video platform exercises nearly every building block: blob store, CDN, database, cache, queue and search.
 - Video is large, clients are heterogeneous, traffic is read-heavy and skewed, and bandwidth dominates cost.
 - The upload path and the watch path have very different characteristics and should be designed separately.
 - Scoping the problem early is essential because the full product is far too big for one interview.
+- A single upload touches most building blocks, from the blob store and queues to the CDN and sharded counters.
 </KeyTakeaways>

@@ -35,6 +35,7 @@ export const parts: Part[] = [
       lesson('common-traps', 'Common Interview Traps and How to Avoid Them'),
       lesson('preparation-timeline', 'How Long Should You Prepare?'),
       lesson('scaled-framework', 'The SCALED Framework'),
+      lesson('mock-interview', 'A Mock Interview, Start to Finish'),
       quiz('quiz', 'Quiz: The System Design Interview'),
     ]),
     chapter('core-concepts', 'Core Concepts', [
@@ -252,8 +253,11 @@ export const parts: Part[] = [
       quiz('quiz', 'Quiz: Microblogging'),
     ]),
     chapter('newsfeed', 'Design a Newsfeed System', [
-      lesson('design', 'System Design: Newsfeed'),
+      lesson('overview', 'System Design: Newsfeed'),
+      lesson('requirements', 'Requirements of a Newsfeed System'),
+      lesson('design', 'Design of a Newsfeed System'),
       lesson('fanout-ranking', 'Fan-out and Ranking Deep Dive'),
+      lesson('evaluation', 'Evaluating the Newsfeed Design'),
       quiz('quiz', 'Quiz: Newsfeed'),
     ]),
     chapter('photo-sharing', 'Design a Photo-Sharing Service (Instagram)', [
@@ -261,9 +265,11 @@ export const parts: Part[] = [
       lesson('requirements', 'Requirements of a Photo-Sharing Service'),
       lesson('design', 'Design of a Photo-Sharing Service'),
       lesson('detailed-design', 'Detailed Design of a Photo-Sharing Service'),
+      lesson('evaluation', 'Evaluating the Photo-Sharing Design'),
       quiz('quiz', 'Quiz: Photo Sharing'),
     ]),
     chapter('url-shortener', 'Design a URL Shortener (TinyURL)', [
+      lesson('overview', 'System Design: URL Shortener'),
       lesson('requirements', 'Requirements and Estimation'),
       lesson('design', 'Design: Encoding and Key Generation'),
       lesson('evaluation', 'Evaluating the URL Shortener'),

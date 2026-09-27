@@ -86,10 +86,28 @@ flowchart LR
 
 Short prefixes are requested constantly: every query starts with one of a few dozen characters. The responses for all one- and two-character prefixes can be precomputed and served from the CDN or even bundled into the client. Popular longer prefixes also have high cache hit rates at the CDN with a short time-to-live. The browser caches responses for the session, so backspacing is instant.
 
+## Decayed frequency, worked through
+
+With a daily decay factor of 0.9, each day's score is `score = 0.9 × previous score + today's count`:
+
+| Day | "world cup schedule" count | Score | "tax deadline" count | Score |
+| --- | --- | --- | --- | --- |
+| 1 | 100,000 | 100,000 | 20,000 | 20,000 |
+| 2 | 80,000 | 170,000 | 20,000 | 38,000 |
+| 3 | 5,000 | 158,000 | 20,000 | 54,200 |
+| 10 | 1,000 | ~70,000 | 20,000 | ~130,000 |
+
+The burst of interest in the first query fades within about a week, while the steadily searched second query overtakes it. The decay factor controls how quickly suggestions "forget": 0.9 per day gives a memory of roughly ten days.
+
+<Ponder question="Why drop queries that appear only a handful of times, even though they are legitimate searches?">
+Two reasons. Rare queries add little value — few users would ever pick them — yet they bloat the trie. More importantly, they can leak private information: a query typed by one person (an address, a name with a medical condition) could be suggested to others. Requiring a minimum number of distinct users before a query becomes a suggestion is a simple, effective privacy safeguard.
+</Ponder>
+
 <KeyTakeaways>
 - The API is a cacheable GET that returns the top suggestions for a prefix, language and region.
 - Suggestion servers answer from an in-memory trie with precomputed top suggestions per node, swapped in atomically.
 - An offline pipeline logs searches, aggregates decayed frequencies, filters unsafe or rare queries and builds trie snapshots.
 - A small trending trie and a fast removal channel cover freshness and safety between full rebuilds.
 - CDN and browser caching absorb short and popular prefixes.
+- Exponentially decayed scores let recent popularity dominate while old bursts fade.
 </KeyTakeaways>

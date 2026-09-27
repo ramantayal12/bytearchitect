@@ -13,7 +13,7 @@ import { countWords } from '../../build/vite-plugin-lesson-stats'
 import { flattenLessons, type Part } from '@/features/courses'
 import { validateQuiz, type QuizDefinition } from '@/features/quiz'
 
-const MIN_LESSON_WORDS = 350
+const MIN_LESSON_WORDS = 450
 const LESSON_QUIZ_QUESTIONS = { min: 2, max: 5 }
 const CHAPTER_QUIZ_MIN_QUESTIONS = 6
 const FINAL_ASSESSMENT_MIN_QUESTIONS = 15
@@ -87,6 +87,10 @@ for (const [outlineFile, { parts }] of Object.entries(outlines)) {
           it(`is a full lesson (≥ ${MIN_LESSON_WORDS} words) with key takeaways`, () => {
             expect(countWords(source)).toBeGreaterThanOrEqual(MIN_LESSON_WORDS)
             expect(source).toContain('<KeyTakeaways>')
+          })
+
+          it('has at least one point to ponder', () => {
+            expect(source).toContain('<Ponder question=')
           })
         }
       },

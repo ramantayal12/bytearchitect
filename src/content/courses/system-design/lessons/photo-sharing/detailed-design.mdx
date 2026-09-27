@@ -54,6 +54,10 @@ The feed uses the hybrid fan-out from the newsfeed chapter. Two photo-specific c
 - **Private accounts** require permission checks during hydration; if a follower is removed, their inbox may still contain the post ID, but hydration filters it out.
 - **Media readiness**: fan-out happens only after the post leaves the pending state.
 
+<Ponder question="A celebrity with 200 million followers posts a photo. Which parts of the system feel the load, and how does the design protect them?">
+Fan-out is avoided because the celebrity is on the pull path; followers' feeds fetch the post from a hot cache at read time. The post's metadata and like counters become hot keys, handled by caching and sharded counters. The image variants receive enormous request rates, handled by proactive pushing to CDN edges and request coalescing so the origin sees only a handful of fetches.
+</Ponder>
+
 <KeyTakeaways>
 - Image workers validate safely, strip metadata, resize into variants, encode modern formats and compute placeholders and hashes.
 - Idempotent jobs with deterministic variant keys make retries safe.

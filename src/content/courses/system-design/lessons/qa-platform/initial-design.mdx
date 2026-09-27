@@ -71,10 +71,55 @@ This design has few moving parts, which makes it easy to reason about, operate a
 In an interview, say explicitly that this is a starting point and name the parts you expect to break first, for example the single primary database and the feed computed at request time. That frames the next part of the discussion.
 </Callout>
 
+## Schema
+
+```sql
+CREATE TABLE questions (
+  question_id BIGINT PRIMARY KEY, author_id BIGINT, title TEXT, body TEXT,
+  answer_count INT DEFAULT 0, follower_count INT DEFAULT 0, created_at TIMESTAMP
+);
+CREATE TABLE answers (
+  answer_id BIGINT PRIMARY KEY, question_id BIGINT REFERENCES questions,
+  author_id BIGINT, body TEXT, score INT DEFAULT 0, created_at TIMESTAMP
+);
+CREATE INDEX answers_by_question ON answers (question_id, score DESC);
+CREATE TABLE votes (
+  user_id BIGINT, answer_id BIGINT, direction SMALLINT,   -- +1 or -1
+  PRIMARY KEY (user_id, answer_id)                         -- one vote per user per answer
+);
+CREATE TABLE question_topics (question_id BIGINT, topic_id BIGINT, PRIMARY KEY (topic_id, question_id));
+CREATE TABLE follows (follower_id BIGINT, target_type TEXT, target_id BIGINT,
+                      PRIMARY KEY (follower_id, target_type, target_id));
+```
+
+The index on `(question_id, score DESC)` makes "top answers for this question" a short index range scan.
+
+## Posting an answer
+
+```mermaid
+sequenceDiagram
+  participant U as Author
+  participant W as Web server
+  participant DB as Primary DB
+  participant C as Cache
+  participant Q as Job queue
+  U->>W: POST answer
+  W->>DB: INSERT answer, UPDATE answer_count (one transaction)
+  DB-->>W: ok
+  W->>C: delete cached question page
+  W->>Q: enqueue index, notify followers
+  W-->>U: 201 Created (session marks "read from primary for 10 s")
+```
+
+<Ponder question="The initial design increments an answer's score inside the same transaction as inserting the vote. What happens when a viral answer receives 2,000 votes per second?">
+Every vote transaction must lock the same answer row to update its score, so votes serialize on that row. At a few milliseconds per transaction, the row tops out at a few hundred updates per second; requests queue, time out, and the primary's connection pool fills — hurting every other write. This hot-row problem is one of the first things the final design fixes by turning votes into events aggregated in batches.
+</Ponder>
+
 <KeyTakeaways>
 - The initial design uses stateless web servers, a primary database with read replicas, a cache, a blob store and background workers.
 - The relational model fits questions, answers, votes, topics and follows, with a denormalized score for sorting.
 - Question pages are served mostly from cache; writes invalidate cache entries and enqueue background work.
 - Read-your-writes is provided by routing an author's reads to the primary for a short time.
 - The home feed is computed at request time, which is simple but will not scale indefinitely.
+- An index on (question, score) serves top answers; the hot answer row becomes the first write bottleneck.
 </KeyTakeaways>

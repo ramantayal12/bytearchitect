@@ -51,6 +51,10 @@ These metrics guide ranking changes, which are tested with A/B experiments.
 A good one-line summary: "Typeahead is a read-only, in-memory prefix lookup fed by an offline aggregation pipeline, so failures in the pipeline only make suggestions stale, never unavailable."
 </Callout>
 
+<Ponder question="A harmful suggestion appears for a trending prefix and is reported on social media. How quickly can it be removed in this design, and how?">
+Within seconds to a minute: operators add the suggestion to the fast removal list, which is pushed to all suggestion servers (and triggers a purge of affected prefixes at the CDN), and servers filter it out at request time. The next full build then excludes it permanently through the blocklist. Waiting for the next scheduled rebuild would be far too slow, which is why the override channel exists.
+</Ponder>
+
 <KeyTakeaways>
 - The serving path meets latency and availability goals because it depends only on an in-memory snapshot.
 - Pipeline failures and bad snapshots are contained by keeping old versions, canary rollouts and instant rollback.

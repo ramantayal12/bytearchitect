@@ -45,10 +45,28 @@ Keep learning from real-world engineering blogs and postmortems, and look for th
 3. Use the primer lessons as a quick reference before interviews.
 4. Pick a system you use daily and sketch how you think it works, then compare with its public engineering write-ups.
 
+## Patterns you will reuse everywhere
+
+| Pattern | Where you saw it |
+| --- | --- |
+| Precompute for reads | News feeds, typeahead tries, year-in-review summaries |
+| Push versus pull fan-out | Microblogging, newsfeed, photo sharing |
+| Single owner per entity for ordering | Messaging conversations, collaborative documents, city partitions in ride-hailing |
+| Store before acknowledging | Messaging inboxes, queues, payment state machines |
+| Idempotency keys | Payments, queues, task schedulers, messaging |
+| Commit metadata last | Blob stores, multipart uploads, Pastebin |
+| Cells and staged rollouts | Deployment systems, outage remediations |
+| Separate online serving from offline pipelines | Typeahead, search, ML data infrastructure |
+
+<Ponder question="If you could remember only one question to ask about any design, which would be most valuable?">
+"What happens when this fails?" Asked of every component and every step, it surfaces single points of failure, missing idempotency, retry storms, stale caches, lost messages and recovery surges — the issues behind most real outages and most interview follow-ups. Good designs answer it with detection, recovery and a limited blast radius.
+</Ponder>
+
 <KeyTakeaways>
 - Requirements and estimates drive design decisions; revisit them whenever you are unsure.
 - Separating flows with different characteristics is one of the most powerful design moves.
 - Every design is a set of trade-offs justified by the product's needs.
 - Failure is normal at scale; idempotency, retries, replication and staged rollouts appear everywhere.
 - SCALED is a habit of systematic thinking, useful in interviews and real design reviews alike.
+- A small set of patterns — precomputation, fan-out choices, single owners, idempotency, commit-last, cells — recurs across nearly every design.
 </KeyTakeaways>

@@ -67,6 +67,14 @@ Nodes' positions are kept in a sorted array. Finding the owner of a key is a bin
 - **Jump consistent hash:** a fast, memory-free algorithm for mapping keys to numbered buckets, suited to cases where nodes are added and removed only at the end of the list.
 - **Bounded-load consistent hashing** caps each node's load at a multiple of the average, overflowing to the next node, which helps with hot keys.
 
+## Virtual nodes, by the numbers
+
+With 10 physical nodes each placed once on the ring, the largest node typically owns two to three times its fair share of keys. With 100–200 virtual nodes each, the imbalance drops to within about 10% of the average. And when one node fails, its load is spread across all nine others (about 11% extra each) rather than doubling the load on a single successor.
+
+<Ponder question="A cache cluster uses consistent hashing, and one product page key receives 30% of all requests. Does consistent hashing help?">
+No — consistent hashing balances the *number of keys* per node, not the traffic per key. One very hot key still lands on a single node and overloads it. Hot keys need other remedies: replicating that key to several nodes, adding a small local cache in application servers, splitting the key, or bounded-load consistent hashing that spills excess requests to the next node.
+</Ponder>
+
 <KeyTakeaways>
 - Modulo hashing remaps most keys when the node count changes; consistent hashing moves only about 1/N.
 - Nodes and keys share a hash ring, and each key belongs to the next node clockwise.

@@ -74,10 +74,38 @@ When load exceeds capacity despite preparation:
 Flash-sale designs are mostly about isolation: keep the hot path (reserve, pay, confirm) small and protected, and push everything else to caches, queues or off switches.
 </Callout>
 
+## Rough numbers for one product drop
+
+```text
+Stock:                       10,000 units
+Shoppers at start:           1,000,000
+Product page requests:       ~500,000/s for the first minute → almost all from CDN
+Checkout attempts admitted:  5,000/s (admission controller)
+In-memory reservations:      ~5,000 atomic decrements/s → trivial for one node
+Sell-out time:               ~2–5 seconds of admitted traffic, plus payment failures returning units
+```
+
+The inventory operation itself is cheap; what must be protected is everything around it — sessions, carts, payment calls and databases — from the million shoppers who will not get a unit.
+
+## Evaluation
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Availability under the spike | CDN for reads, admission control, pre-scaling, feature shedding |
+| No overselling | Atomic decrement-if-positive reservations; releases on payment failure; reconciliation |
+| Reasonable checkout latency | Small protected hot path; asynchronous order persistence |
+| Fairness | Queue positions, per-user limits, bot defenses |
+| Graceful degradation | Feature flags, friendly sold-out pages from cache |
+
+<Ponder question="The in-memory inventory counter's node crashes mid-sale. How do you recover without overselling?">
+Keep the counter replicated (with synchronous replication for this key, or a small consensus-backed store) so a replica takes over with the current value. If the value is uncertain, recompute it conservatively from durable data — initial stock minus confirmed orders minus reservations still in the queue — and pause checkout for a few seconds while doing so. Pausing briefly is far better than resuming from a stale, higher count and selling units that do not exist.
+</Ponder>
+
 <KeyTakeaways>
 - Flash-sale spikes are predictable, so load testing, pre-scaling and cache warming are essential.
 - Reads are served from the CDN with approximate stock; accurate checks happen at checkout.
 - Admission control protects inventory and payment systems from the full spike.
 - Atomic in-memory reservations, bucketed stock and asynchronous order writes avoid hot-row contention and overselling.
 - Graceful degradation sheds non-essential features and queues work rather than failing.
+- The inventory operation is cheap; the design's real job is shielding everything around it from the crowd.
 </KeyTakeaways>

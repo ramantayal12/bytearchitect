@@ -46,6 +46,10 @@ We will aim for these goals, which shape the rest of the chapter:
 If you have already designed a video platform and a newsfeed, a photo-sharing interview is largely about combining them well. Focus your deep dives on image variants, CDN delivery and the feed.
 </Callout>
 
+<Ponder question="The chapter says media storage and bandwidth dominate cost. If you could make only one change to cut cost, what would it be?">
+Serve smaller images. Modern formats such as WebP or AVIF and right-sized variants for each screen cut bytes per image view by 25–50% or more, and image views number in the hundreds of billions per day — so this reduces CDN egress, the largest recurring cost, as well as storage for variants. Tiering old originals to cold storage is the next biggest lever.
+</Ponder>
+
 <KeyTakeaways>
 - Photo sharing combines a media pipeline with a social feed.
 - Media storage and bandwidth dominate cost, so image handling drives the design.

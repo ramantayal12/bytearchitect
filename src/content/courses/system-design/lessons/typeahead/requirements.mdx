@@ -58,6 +58,10 @@ Although popularity is the main signal, ranking can combine:
 - **Locality:** queries popular in the user's region.
 - **Result quality:** queries that lead to clicks rather than immediate reformulation.
 
+<Ponder question="Debouncing sends a request only after the user pauses for about 50–100 ms. What is the trade-off?">
+It cuts requests by roughly two-thirds, because fast typists do not trigger a request for every character, and saves both server load and mobile data. The cost is up to one debounce interval of extra delay before suggestions appear, which is why the interval stays short. Combined with caching of responses already fetched, most users never notice the delay.
+</Ponder>
+
 <KeyTakeaways>
 - Typeahead returns the top 5 to 10 popular completions for a prefix, filtered for safety and localized.
 - Server processing must take only milliseconds; eventual consistency with query popularity is fine.

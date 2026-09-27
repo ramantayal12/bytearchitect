@@ -50,10 +50,28 @@ The post-event summary described several changes, including:
 
 **Keep dependencies of critical tools minimal.** Monitoring and status communication should not depend on the services they report on.
 
+## Why per-peer threads explode
+
+With N front-end servers, each holding one thread per peer:
+
+```text
+Threads per server   = N − 1
+Threads in the fleet = N × (N − 1)
+N = 1,000  → ~1,000 threads per server, ~1 million in total
+N = 1,100  → ~1,100 threads per server — a 10% capacity add raises every server's count by 10%
+```
+
+If the operating system limit sits just above the current count, a modest capacity addition pushes *every* server over it at the same moment — a correlated failure caused by the very act of scaling up. Designs whose per-node cost grows with fleet size need explicit headroom alarms, or better, a structure (cells, gossip with bounded fan-out, a membership service) whose per-node cost stays constant.
+
+<Ponder question="Why did adding capacity — normally a safe, routine operation — cause this outage, and what general testing practice would have caught it?">
+Adding servers increased a per-server cost (threads per peer) that was close to a hard limit nobody was monitoring, so the "safe" change triggered a limit on every existing server. Load and scale tests that grow the fleet size (not just request volume) beyond production levels, combined with alarms on utilization of every hard limit (threads, file descriptors, connections), would have revealed the cliff before production reached it.
+</Ponder>
+
 <KeyTakeaways>
 - A small capacity addition pushed every front-end server past the operating system's thread limit, because each server kept a thread per peer.
 - Front-end servers could not build shard maps, and failures cascaded to services that depended on Kinesis.
 - Recovery was slow because servers had to be restarted gradually and learn about their peers again.
 - Per-node costs that grow with fleet size, unmonitored hard limits and expensive restarts are dangerous patterns.
 - Cellular architecture and independent monitoring and status paths limit blast radius and aid recovery.
+- Per-peer resources grow quadratically across a fleet, so scale tests must grow fleet size, not only traffic.
 </KeyTakeaways>

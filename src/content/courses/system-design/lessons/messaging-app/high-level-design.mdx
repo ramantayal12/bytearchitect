@@ -94,10 +94,54 @@ Media is too large to send through the chat path. The sender's app encrypts the 
 
 Gateways report connects and disconnects to the presence service, which records "online" or "last seen at" per user. Presence is shared only with contacts who are interested, and typically only while their app is open, because broadcasting every status change to every contact would generate enormous traffic.
 
+## The inbox as a table
+
+In a wide-column store, each device's inbox is a partition ordered by sequence:
+
+| Column | Example | Role |
+| --- | --- | --- |
+| device_id (partition key) | `bob-phone` | All pending messages for one device live together |
+| conversation_id, seq (clustering key) | `c-77`, `1043` | Ordered retrieval during sync |
+| message_id | `alice-phone:9f1c` | Client-generated ID for deduplication |
+| sender_id, sent_at | `alice`, timestamp | Display metadata |
+| ciphertext | bytes | Encrypted payload (or blob reference for media) |
+
+Sync is a range read — "everything after sequence 1040 in each conversation" — and acknowledgement deletes the delivered rows. Rows also carry a TTL (for example, 30 days) so messages for devices that never return eventually disappear.
+
+## Keeping connections alive
+
+Mobile carriers and home routers drop idle TCP connections after a timeout, sometimes only a few minutes. Clients therefore send small **heartbeats** so the gateway knows the device is still reachable and intermediate network devices keep the connection open.
+
+| Heartbeat interval | Effect |
+| --- | --- |
+| Short (10–20 s) | Dead connections detected quickly; more battery and server load |
+| Long (4–5 min) | Saves battery; risks silent disconnects by aggressive network timeouts |
+| Adaptive | Client learns the longest interval that survives on its current network |
+
+When the app is in the background, mobile operating systems often suspend the connection entirely, which is why push notifications are needed to wake the app.
+
+## A message on the wire
+
+```json
+{ "type": "send", "clientMsgId": "alice-phone:9f1c", "to": "conv:c-77",
+  "ciphertext": "base64...", "sentAt": 1790000123456 }
+{ "type": "ack", "clientMsgId": "alice-phone:9f1c", "seq": 1043 }
+{ "type": "deliver", "conv": "c-77", "seq": 1043, "from": "alice", "ciphertext": "base64..." }
+{ "type": "received", "conv": "c-77", "upToSeq": 1043 }
+```
+
+A compact binary encoding of the same frames saves bandwidth and battery at this scale.
+
+<Ponder question="The session directory says Bob is on gateway 7, but Bob's phone just moved from Wi-Fi to cellular and reconnected to gateway 12. What happens to a message sent to him in that instant?">
+The message service pushes to gateway 7, which no longer has Bob's connection and reports failure (or the push times out). The message is still safely in Bob's inbox, because it was stored before routing. When Bob's phone reconnects to gateway 12, it syncs from the inbox and receives the message. At worst, delivery is delayed by a second; correctness never depends on the directory being current.
+</Ponder>
+
 <KeyTakeaways>
 - Devices keep persistent connections to chat gateways; a session directory maps each device to its gateway.
 - The message service stores each message in the recipient's per-device inbox before acknowledging the sender.
 - Online recipients get messages pushed through their gateway; offline recipients get a push notification and sync on reconnect.
 - Messages are deleted from the inbox once the device acknowledges them.
 - Media is encrypted, uploaded to a blob store and referenced from a normal chat message.
+- Each device's inbox is a partition ordered by conversation and sequence, with TTLs for devices that never return.
+- Heartbeat intervals balance quick failure detection against battery and server load.
 </KeyTakeaways>

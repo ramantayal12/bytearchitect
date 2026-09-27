@@ -82,6 +82,21 @@ flowchart TB
 - **Automate:** deployments, scaling and failover.
 - **Observe:** metrics, logs and traces grow more important as the system grows more distributed.
 
+## Which stage fixes which bottleneck
+
+| Symptom | Bottleneck | Stage that fixes it |
+| --- | --- | --- |
+| App and database fight for CPU and memory | Shared machine | Separate the database |
+| One app server at 100% CPU | Web tier capacity | Load balancer and stateless servers |
+| Database CPU dominated by repeated reads | Read load | Cache, CDN, read replicas |
+| Requests slow because of email or image processing | Work on the request path | Queues and background workers |
+| Primary database cannot keep up with writes or storage | Write capacity | Sharding |
+| Users far away see high latency; region outages take everything down | Geography, single region | Multiple regions |
+
+<Ponder question="A startup with 5,000 users asks whether it should shard its database now 'to be ready for scale'. What would you advise?">
+Not yet. Sharding adds significant complexity — cross-shard queries, rebalancing, operational overhead — and a single well-indexed database with a replica and a cache handles far more than 5,000 users. Measure growth, choose a sensible future shard key now (for example, keep data keyed by user ID), and shard when estimates show the primary approaching its limits.
+</Ponder>
+
 <KeyTakeaways>
 - Systems evolve from one server to separate databases, load-balanced stateless servers, caches and CDNs.
 - Replication scales reads and provides failover; queues move slow work off the request path.

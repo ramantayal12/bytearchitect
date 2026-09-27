@@ -70,6 +70,10 @@ A typical breakdown for a 100 ms target:
 
 Server work is tiny. Most of the budget goes to the network, which is why serving from edge regions and CDN caches matters more than optimizing the lookup itself.
 
+<Ponder question="A partition for prefixes starting with 's' becomes overloaded while others are idle. What are your options?">
+Split the range further by traffic ("sa"–"sh", "si"–"sz"), add more replicas to the hot partition, and cache its most popular prefixes at the CDN, where "s", "sp" and "sh" are almost certainly cached already. Because boundaries are chosen from measured traffic when snapshots are built, rebalancing is part of the regular rebuild rather than an emergency migration.
+</Ponder>
+
 <KeyTakeaways>
 - Partition by language and region first, then by traffic-balanced prefix ranges, with more replicas for hot partitions.
 - Versioned, validated snapshots roll out gradually and roll back instantly.

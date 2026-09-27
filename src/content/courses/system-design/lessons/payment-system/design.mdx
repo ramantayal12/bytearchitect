@@ -115,10 +115,48 @@ Debits equal credits in every transaction, so the books always balance. Entries 
 
 The payout scheduler periodically selects sellers with available balances, creates payout records with idempotency keys and executes them. Reconciliation jobs run daily: they match every internal payment and payout against the PSP's settlement file, flagging missing, extra or mismatched records for investigation. Reconciliation is the safety net that catches bugs every other mechanism missed.
 
+## Payment records
+
+```sql
+CREATE TABLE payments (
+  payment_id        BIGINT PRIMARY KEY,
+  order_id          BIGINT NOT NULL,
+  idempotency_key   TEXT   NOT NULL UNIQUE,     -- duplicates map to the same record
+  amount_minor      BIGINT NOT NULL,            -- e.g. cents
+  currency          CHAR(3) NOT NULL,
+  state             TEXT   NOT NULL,            -- created, authorizing, authorized, unknown, captured, failed, refunded
+  psp_reference     TEXT,
+  version           INT    NOT NULL,            -- optimistic concurrency for state transitions
+  created_at        TIMESTAMP, updated_at TIMESTAMP
+);
+CREATE TABLE payment_attempts (                -- every external call, for audit and recovery
+  payment_id BIGINT, attempt INT, request JSONB, response JSONB, status TEXT, at TIMESTAMP,
+  PRIMARY KEY (payment_id, attempt)
+);
+```
+
+State transitions use `UPDATE … SET state = ?, version = version + 1 WHERE payment_id = ? AND version = ?`, so two workers (for example, the webhook handler and the recovery job) cannot apply conflicting transitions.
+
+## Failure scenarios
+
+| Failure | Risk | Handling |
+| --- | --- | --- |
+| PSP times out during authorization | Customer charged but we think it failed | Unknown state; query PSP with the same key; never retry with a new key |
+| Webhook arrives before our own response | Out-of-order updates | State machine rejects invalid transitions; versioned updates |
+| Duplicate webhook | Double-counting in the ledger | Webhooks deduplicated by PSP event ID |
+| Service crashes after capture, before ledger write | Ledger missing an entry | Payment event published via a transactional outbox; ledger consumer is idempotent |
+| PSP settlement differs from our records | Money unaccounted for | Daily reconciliation flags the mismatch for investigation |
+
+<Ponder question="The marketplace takes a 10% fee on a 3-item order of $33.33. How do you split fees and seller payouts without losing or inventing a cent?">
+Compute in integer cents and decide explicitly where rounding remainders go. For example, 10% of 3,333 cents is 333.3 — round to 333 cents for the fee and give the seller 3,000 cents, so fee plus payout equals exactly 3,333. When splitting across several sellers, allocate rounded amounts and assign any leftover cents deterministically (for example, to the largest line item). The ledger entry must balance to the cent, or it is rejected.
+</Ponder>
+
 <KeyTakeaways>
 - A dedicated executor is the only caller of the PSP, attaching idempotency keys and logging every request.
 - Payment state machines record intent before and outcome after each external call; an Unknown state handles timeouts.
 - Recovery jobs resolve stuck payments by querying the PSP with the same idempotency key.
 - A double-entry, append-only ledger with integer amounts keeps money balanced and auditable.
 - Daily reconciliation against PSP settlement files catches discrepancies that other mechanisms miss.
+- Unique idempotency keys and versioned state transitions prevent duplicate and conflicting updates.
+- Rounding rules must be explicit so every ledger entry balances to the smallest currency unit.
 </KeyTakeaways>

@@ -46,10 +46,26 @@ A user who edits offline for hours may return with hundreds of operations based 
 - **Log granularity:** storing every keystroke gives fine-grained history but costs storage; batching and compaction trade history detail for efficiency.
 - **Presence fidelity:** frequent cursor updates look smooth but consume bandwidth; throttling saves resources at the cost of slightly jumpy cursors.
 
+## Latency budget for a remote edit
+
+| Step | Budget |
+| --- | --- |
+| Local apply and render on Alice's screen | under 16 ms (one frame) |
+| Alice's client to gateway | 20–80 ms |
+| Session server transform, log append (replicated) | 5–15 ms |
+| Broadcast to Bob's gateway and client | 20–80 ms |
+| Bob's client transforms against pending edits and renders | under 16 ms |
+| **Remote edit visible to Bob** | **~60–200 ms** |
+
+<Ponder question="An all-hands meeting has 400 people typing into one agenda document. Which part of the design strains first, and what would you do?">
+The single session server for that document: every operation must be transformed against concurrent ones and broadcast to 400 clients, and cursor updates alone could reach thousands per second. Throttle and coalesce presence updates, batch operations per client, broadcast in batches (for example every 50 ms), and cap active editors while letting others join read-only with a slightly delayed stream. Splitting the document into independently owned sections is the structural fix if it happens often.
+</Ponder>
+
 <KeyTakeaways>
 - The design meets latency, convergence and durability requirements with local application, a single owner per document and a durable log.
 - Fencing tokens prevent a stale owner from accepting edits after ownership moves.
 - Long offline sessions are merged by transformation or CRDT merging, with version history as a safety net.
 - Scaling limits include very busy documents, very large documents and globally distributed editors.
 - Key trade-offs are central ownership versus peer-to-peer, log granularity and presence fidelity.
+- A remote edit typically becomes visible to collaborators within about 60–200 ms.
 </KeyTakeaways>

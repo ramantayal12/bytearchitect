@@ -36,7 +36,25 @@ A **vector clock** keeps a counter for every node. Comparing two vectors reveals
 
 ## Hybrid logical clocks
 
-A **hybrid logical clock (HLC)** combines physical time with a logical counter. Its timestamp stays close to wall-clock time — useful for humans and time-range queries — while the logical component preserves causality when clocks disagree. HLCs fit in 64 bits and are used by several distributed databases to order transactions.
+A **hybrid logical clock (HLC)** combines physical time with a logical counter. Its timestamp stays close to wall-clock time — useful for humans and time-range queries — while the logical component preserves causality when clocks disagree. HLCs fit in 64 bits (for example, 48 bits of milliseconds and 16 bits of counter) and are used by several distributed databases to order transactions.
+
+Each node keeps a pair `(l, c)`: `l` is the largest physical time it has seen, and `c` is a counter for events that share the same `l`.
+
+- **Local event or send:** if the physical clock `pt` is ahead of `l`, set `l = pt, c = 0`; otherwise keep `l` and increment `c`.
+- **Receive a message stamped `(lm, cm)`:** set `l` to the maximum of `l`, `lm` and `pt`, and set `c` so the new timestamp is larger than both the local and the received one (`max(c, cm) + 1` when they share the same `l`).
+
+### A worked example
+
+Node B's clock runs 5 ms behind node A's.
+
+| Step | Event | Physical clock | HLC timestamp |
+| --- | --- | --- | --- |
+| 1 | A sends a message | A: 1000 | (1000, 0) |
+| 2 | B receives it | B: 996 | (1000, 1) — B adopts A's larger time and bumps the counter |
+| 3 | B replies | B: 997 | (1000, 2) — physical time is still behind, so only the counter grows |
+| 4 | B's clock passes 1000 | B: 1001 | (1001, 0) — back to plain physical time |
+
+With physical timestamps alone, B's reply at step 3 (997) would sort *before* A's message (1000). With HLC, it correctly sorts after, yet the timestamp never drifts far from real time.
 
 ## Bounded-uncertainty clocks
 
@@ -64,6 +82,10 @@ The same reasoning applies to comments and their replies, edits to a document, o
 <Callout type="tip">
 In most product designs, Snowflake-style IDs plus per-entity ordering (for example, sequence numbers within a chat conversation assigned by that conversation's owner) are sufficient. Reach for logical or hybrid clocks when you need system-wide causal ordering.
 </Callout>
+
+<Ponder question="A chat service assigns message IDs from each server's wall clock. Server B's clock runs 80 ms behind server A's. Alice's message goes through A and Bob's reply through B 50 ms later. What do other users see, and which fix from this lesson is simplest?">
+Bob's reply gets a timestamp about 30 ms *earlier* than Alice's message, so it sorts above the message it answers. The simplest fix is per-conversation sequence numbers assigned by the conversation's owner (a single writer per conversation), which order messages exactly within a conversation without any clock synchronization. Hybrid logical clocks would also work if IDs must stay close to wall-clock time across conversations.
+</Ponder>
 
 <KeyTakeaways>
 - Clock skew means physical-time IDs can misorder causally related events.

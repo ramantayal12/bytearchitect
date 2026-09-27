@@ -95,10 +95,70 @@ Tokens flow from the GPU server through the scheduler and orchestrator to the cl
 - **Multi-region capacity:** the gateway fails over across regions when a GPU cluster degrades.
 - **Quality canaries:** new model versions receive a slice of traffic and are compared on evaluation sets and user feedback before full rollout.
 
+## Storing conversations
+
+| Table | Key | Fields |
+| --- | --- | --- |
+| conversations | (user_id, conversation_id) | title, model, created_at, updated_at, summary of older turns |
+| messages | (conversation_id, message_id) | role (user or assistant), content, attachments, token counts, model version, created_at |
+| feedback | message_id | rating, comment, user_id |
+
+Partitioning by user keeps "list my conversations" on one shard; messages are clustered by time within a conversation. Deleting a conversation removes its messages and schedules deletion from backups and analytics copies within the retention policy.
+
+## One message, end to end
+
+```mermaid
+sequenceDiagram
+  participant U as App
+  participant O as Chat orchestrator
+  participant S as Safety filter
+  participant G as Model gateway
+  participant I as Inference server
+  participant DB as Conversation store
+  U->>O: POST message (stream)
+  O->>DB: load recent turns and summary
+  O->>S: check input
+  S-->>O: allowed
+  O->>G: generate (model, prompt, budget)
+  G->>I: schedule into running batch
+  loop each token
+    I-->>O: token
+    O-->>U: SSE delta
+  end
+  O->>DB: save user and assistant messages, usage
+  O-->>U: done (usage)
+```
+
+The output safety filter runs on the stream in parallel, checking accumulated text every few tokens, and can stop the stream if needed.
+
+## Evaluating the design
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Fast time to first token | Prefix caching, short queues via load shedding, prefill capacity, nearby regions |
+| Smooth streaming | Continuous batching tuned so per-token latency stays below reading speed |
+| Availability | Multi-region GPU pools, gateway failover, fallback to smaller models |
+| Cost efficiency | Batching, paged KV cache, quantization, model routing, cancellation |
+| Safety | Input and streaming output filters, policy-specific system prompts |
+| Fairness | Priority lanes by plan, token-based rate limits, degrade free tier first |
+
+| Failure | Effect | Handling |
+| --- | --- | --- |
+| A GPU server dies mid-generation | Streams on that server stop | Orchestrator retries the generation elsewhere and resumes the stream, or tells the user to regenerate |
+| A model's cluster is saturated | Queues and time to first token grow | Gateway routes new requests to another region or a smaller model; shed free-tier load |
+| Conversation store slow | Loading history is delayed | Cache recent conversations; the orchestrator can proceed with cached turns |
+| Safety service down | Risk of unsafe output | Fail closed for high-risk categories; degrade to conservative built-in checks |
+
+<Ponder question="Why should the orchestrator, rather than the inference servers, own the conversation history and prompt building?">
+Inference servers should be stateless, interchangeable pools optimized for GPU throughput; if they owned history, requests would be pinned to specific servers, failover would lose context, and scaling models independently would be harder. The orchestrator can load history, apply summaries, enforce budgets and safety, and send a self-contained prompt to any server — while still using conversation-affine routing as a performance hint for prefix caching.
+</Ponder>
+
 <KeyTakeaways>
 - Responses stream over server-sent events; conversations are stored per user.
 - An orchestrator builds prompts, applies safety filters, calls a model gateway and saves results.
 - Continuous batching, paged KV caches and prefix caching maximize GPU throughput.
 - Stable prompt prefixes, summarization of long history and conversation-affine routing improve cache reuse.
 - Cancellation, token budgets, model routing, load shedding and quality canaries control cost and reliability.
+- The orchestrator owns history and prompt building so inference servers stay stateless and interchangeable.
+- Failures are handled by retrying generations elsewhere, routing to other regions or smaller models, and failing safety closed.
 </KeyTakeaways>

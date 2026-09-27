@@ -48,10 +48,27 @@ sequenceDiagram
 In a short-video variant, spend your deep-dive time on the feed: pre-fetching, recommendation freshness and the real-time signal pipeline. Those are what distinguish it from the long-form design.
 </Callout>
 
+## Rough numbers
+
+| Assumption | Value | Consequence |
+| --- | --- | --- |
+| Daily active users | 1 billion | Enormous feed request volume |
+| Clips viewed per user per day | 100 | 100 billion views/day ≈ 1.2 million views per second |
+| Average clip size streamed | ~3 MB | ~3.5 TB/s of egress on average — CDN and pre-fetch efficiency are critical |
+| Uploads per day | 30 million | ~350 uploads/s; each encoded in seconds |
+| Feed requests | One per ~10 clips | ~120,000 feed requests per second, each personalized |
+
+The feed service must rank candidates for 120,000 requests per second within about 100 ms each — far more demanding than the watch-page API of a long-form platform.
+
+<Ponder question="The app pre-fetches the first two seconds of the next five clips. Users skip 60% of clips within a second. How much bandwidth might pre-fetching waste, and how would you tune it?">
+If each pre-fetch is about 0.5 MB and most pre-fetched clips are shown but skipped quickly, a large fraction of pre-fetched bytes is watched only briefly, and clips beyond the user's actual scroll depth are never shown at all. Tune by pre-fetching fewer clips on cellular networks, fetching a lower bitrate for the first second, pre-fetching deeper only for users who tend to watch longer, and cancelling in-flight pre-fetches when the user scrolls away.
+</Ponder>
+
 <KeyTakeaways>
 - Short-video apps reuse the upload, encoding and CDN design but make the recommendation feed the core of the product.
 - Instant playback requires the client to pre-fetch the start of upcoming clips, balanced against wasted bandwidth.
 - Short clips can be encoded by a single worker, but upload volume still requires an elastic, queue-driven fleet.
 - Engagement signals must flow into recommendations within seconds, which calls for a streaming pipeline.
 - Personalized feeds cannot be shared from a cache, but the clips themselves are highly cacheable.
+- At short-video scale, personalized feed ranking — not the watch path — becomes the most demanding service.
 </KeyTakeaways>

@@ -46,6 +46,10 @@ The trip is a **state machine**, and designing it explicitly helps with correctn
 Ride-hailing interviews usually focus on two deep dives: how to find nearby drivers when locations change constantly, and how to guarantee a driver is matched to only one rider. Prepare a crisp answer for both.
 </Callout>
 
+<Ponder question="Which parts of a ride-hailing system need strong consistency, and which can be eventually consistent?">
+Strong: assigning a driver to exactly one trip, the trip's state transitions, and payments (no double charge, no lost capture). Eventual: the cars shown on the rider's map before requesting, surge multipliers (a few seconds stale is fine), ratings, trip history and analytics. Drawing this line early lets you use cheap, highly available components for most of the system and reserve coordination for the few operations that need it.
+</Ponder>
+
 <KeyTakeaways>
 - Ride-hailing connects riders and nearby available drivers within seconds and tracks both in real time.
 - Moving drivers generate millions of location updates, so the spatial index must support frequent writes.

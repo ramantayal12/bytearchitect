@@ -108,6 +108,30 @@ The feed service works like the newsfeed design: it reads the user's inbox of pu
 
 Images from private accounts must not be accessible to arbitrary users who obtain a URL. Media URLs for these posts are **signed** with an expiry and checked at the CDN edge, so a leaked URL stops working after a short time. Public posts can use long-lived, highly cacheable URLs.
 
+## Post and media records
+
+```json
+{
+  "postId": "1837465520112",
+  "authorId": "u_42",
+  "caption": "Sunset at the pier",
+  "media": [
+    { "mediaId": "m_9f1c", "status": "ready", "width": 4032, "height": 3024,
+      "variants": { "thumb": "m_9f1c/150.webp", "small": "m_9f1c/640.webp",
+                    "medium": "m_9f1c/1080.webp", "large": "m_9f1c/2048.webp" },
+      "placeholder": "LEHV6nWB2yk8pyo0adR*.7kCMdnj" }
+  ],
+  "visibility": "public",
+  "createdAt": "2026-09-27T18:04:11Z"
+}
+```
+
+Variant paths are derived from the media ID, so the CDN URL for any variant can be computed without another lookup, and the tiny `placeholder` string lets the app paint a blurred preview before the image loads.
+
+<Ponder question="Why does the app upload the photo before creating the post, rather than sending both in one request?">
+Separating them lets the large, failure-prone transfer happen directly to the blob store with resumable chunks, while the post request stays small and fast. The app can start the upload as soon as a photo is chosen — while the user is still typing the caption — so by the time they tap "share", most of the bytes are already uploaded, and the post feels instant.
+</Ponder>
+
 <KeyTakeaways>
 - Uploads go directly to the blob store with pre-signed URLs; workers create variants asynchronously.
 - Posts stay pending until their media is ready, so followers never see broken images.

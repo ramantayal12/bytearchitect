@@ -60,10 +60,34 @@ Pages change at very different rates. A news homepage changes minutes apart; an 
 
 Frontier partitions are replicated and checkpointed, so a failed node's hosts can be reassigned and resumed. Fetchers are stateless and simply take work from the frontier. Because crawling is inherently repeatable, the occasional duplicate fetch after a failure is harmless.
 
+## How SimHash finds near duplicates
+
+1. Split the page's text into features (for example, words or three-word shingles), each with a weight such as its frequency.
+2. Hash each feature to 64 bits.
+3. Keep 64 counters. For each feature, for every bit position, add the feature's weight if the bit is 1 and subtract it if the bit is 0.
+4. The fingerprint's bit is 1 wherever the counter is positive.
+
+Pages that share most of their features end up with fingerprints that differ in only a few bits. Two pages whose fingerprints differ in 3 or fewer of 64 bits are typically treated as near duplicates. To find candidates quickly among billions of fingerprints, the fingerprint is split into blocks and indexed by block; two fingerprints within distance 3 must share at least one of four 16-bit blocks exactly.
+
+## Evaluating against the requirements
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Scalability | Frontier partitioned by host, stateless asynchronous fetchers, distributed storage |
+| Politeness | robots.txt cache, per-host back queues, scheduling heap, adaptive backoff |
+| Robustness | Timeouts, size and redirect limits, trap detection, per-host budgets |
+| Extensibility | Pluggable stages (render queue, new content types) consuming the same fetch results |
+| Freshness | Change-rate-aware recrawl scheduling with cheap conditional requests |
+
+<Ponder question="A shopping site's faceted navigation produces 40 million distinct URLs showing the same 20,000 products. How would the crawler avoid spending its budget there?">
+The per-host page budget caps the damage immediately. Content deduplication notices that many URLs render the same products and marks them as duplicates. URL pattern analysis learns that parameters such as `sort=` and `color=` do not change the canonical content and strips or ignores them in normalization. Honoring the site's canonical links and robots.txt rules for filter parameters prevents most of the explosion in the first place.
+</Ponder>
+
 <KeyTakeaways>
 - Politeness means obeying robots.txt, one connection per host, adaptive backoff, clear identification and per-IP limits.
 - Deduplication happens at the URL level, with exact content hashes and with near-duplicate fingerprints such as SimHash.
 - Crawler traps generate infinite URL spaces; limits, per-host budgets, pattern rules and soft-404 checks contain them.
 - Recrawl scheduling adapts to each page's change rate and importance.
 - Replicated frontier partitions and stateless fetchers make the crawler resilient to failures.
+- SimHash fingerprints and block indexing find near duplicates among billions of pages quickly.
 </KeyTakeaways>

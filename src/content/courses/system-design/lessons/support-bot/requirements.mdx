@@ -46,6 +46,10 @@ Consider a support platform serving 1,000 companies:
 The numbers show that retrieval quality and prompt size matter more than raw model throughput. Sending fewer, better chunks improves accuracy and cuts the dominant input-token cost at the same time.
 </Callout>
 
+<Ponder question="Why is 'answer from the model's general knowledge when retrieval finds nothing' a dangerous default for a support bot?">
+The model's general knowledge knows nothing about this company's actual refund windows, prices or procedures, so it will produce plausible-sounding but invented policies — which customers will quote back to human agents, sometimes with legal consequences. When retrieval finds nothing relevant, the bot should say it does not know, ask a clarifying question or hand off to a human.
+</Ponder>
+
 <KeyTakeaways>
 - A support bot answers from the company's knowledge base, performs limited account actions and escalates to humans.
 - Grounded, accurate answers and safety matter more than creativity.

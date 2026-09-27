@@ -94,10 +94,40 @@ The **URL-seen check** must answer "have we seen this URL?" for billions of URLs
 
 Pages are compressed and stored in a blob store or wide-column store, keyed by URL fingerprint and fetch time. Metadata such as status, content fingerprint, last-modified time and outgoing links is stored alongside, and change events are published for downstream consumers like the indexer.
 
+## Sizing the Bloom filter
+
+A Bloom filter with `m` bits and `k` hash functions holding `n` items has a false-positive rate of about `(1 − e^(−kn/m))^k`. With about **10 bits per URL** and **7 hash functions**, the false-positive rate is roughly **1%**.
+
+```text
+n = 10 billion URLs × 10 bits = 100 billion bits ≈ 12.5 GB
+Partitioned by host across 50 frontier nodes → 250 MB per node
+```
+
+A 1% false-positive rate means 1% of genuinely new URLs are wrongly skipped. For a search crawler that is acceptable — important pages are usually linked from many places and will be discovered again — and the memory saving over an exact set of 10 billion URLs (hundreds of gigabytes) is enormous.
+
+## Rendering JavaScript-heavy pages
+
+Some pages contain little content until JavaScript runs. Rendering them requires a headless browser, which costs one to two orders of magnitude more CPU and memory than parsing HTML. A crawler therefore renders **selectively**:
+
+```mermaid
+flowchart LR
+  F["Fetched HTML"] --> D{"Little text, heavy scripts,<br/>known client-rendered site?"}
+  D -->|no| P["Parse HTML directly"]
+  D -->|yes| Q[["Render queue"]] --> H["Headless browser pool"] --> P2["Parse rendered DOM"]
+```
+
+The render queue is separate and rate-limited, so expensive rendering never slows the main crawl, and results are cached per site template where possible.
+
+<Ponder question="Why partition the frontier by host rather than by URL hash?">
+Politeness is a per-host rule: at most one connection and a delay between requests to each host. If a host's URLs were spread across many nodes by URL hash, every node would need to coordinate with the others before contacting that host. Partitioning by host puts all of a host's URLs and its scheduling state on one node, so politeness is enforced locally with no coordination.
+</Ponder>
+
 <KeyTakeaways>
 - The crawler consists of a frontier, fetchers, DNS and robots caches, a parser, deduplication, URL filtering and a content store.
 - The frontier uses front queues for priority and per-host back queues with a scheduling heap for politeness.
 - Partitioning the frontier by host makes politeness a local decision on each node.
 - Fetchers use asynchronous I/O with timeouts, size and redirect limits, and conditional requests for recrawls.
 - URLs are normalized and checked against a Bloom filter backed by a fingerprint store.
+- A Bloom filter with about 10 bits per URL gives roughly 1% false positives at a fraction of an exact set's memory.
+- JavaScript rendering is expensive, so it runs selectively in a separate, rate-limited queue.
 </KeyTakeaways>

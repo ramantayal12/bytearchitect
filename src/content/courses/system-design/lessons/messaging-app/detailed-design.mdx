@@ -68,10 +68,46 @@ Protocols in this family use a key agreement for session setup and a **double ra
 
 Encryption shapes the system: the server cannot index or search content, cannot generate link previews (the sender's device does that), and must verify nothing about content beyond size and metadata. Safety features such as spam detection rely on metadata and user reports.
 
+## Sync by sequence number, by example
+
+Bob's phone last acknowledged sequence 1040 in a conversation. While he was in a tunnel, messages 1041, 1042 and 1043 arrived.
+
+```mermaid
+sequenceDiagram
+  participant B as Bob's phone
+  participant G as Gateway
+  participant M as Message service
+  B->>G: reconnect, sync(conv c-77, after 1040)
+  G->>M: fetch inbox after 1040
+  M-->>B: 1041, 1042, 1043
+  B->>B: display, dedupe by message ID
+  B-->>M: received up to 1043
+  M->>M: delete 1041–1043 from Bob's inbox
+```
+
+If message 1042 had been delivered earlier over a flaky connection but its acknowledgement was lost, it is delivered again here, and the device's deduplication by message ID hides the repeat.
+
+## Group fan-out cost
+
+A group of 200 members, each with 1.5 devices on average, needs about 300 per-device inbox writes per message. If 20% of all messages go to groups averaging 50 devices, the fan-out multiplies inbox writes considerably:
+
+```text
+Direct messages:  80% × 1.16M/s × ~2 devices   ≈ 1.9M inbox writes/s
+Group messages:   20% × 1.16M/s × ~50 devices  ≈ 11.6M inbox writes/s
+```
+
+Group fan-out dominates write load, which is why very large groups switch to a shared log that members read from, and why the inbox store must be write-optimized.
+
+<Ponder question="Why assign sequence numbers per conversation rather than one global sequence for all messages?">
+A global sequence would require every message in the system — millions per second — to pass through one counter, a bottleneck and single point of failure. Users only need ordering within a conversation, and each conversation's message rate is tiny, so a per-conversation counter held by the partition that owns the conversation is cheap and local. Different conversations are ordered independently, which nobody can observe anyway.
+</Ponder>
+
 <KeyTakeaways>
 - Ordering uses server-assigned sequence numbers per conversation, with one writer per conversation partition.
 - Client-generated message IDs make retries idempotent; acknowledgements carry the highest contiguous sequence number.
 - At-least-once delivery with deduplication gives users an exactly-once experience.
 - Small groups use fan-out on write to each member device; each linked device has its own inbox and keys.
 - End-to-end encryption means the server relays ciphertext only, which moves search and previews to devices.
+- Devices resume from their last acknowledged sequence, and deduplication hides redelivered messages.
+- Group fan-out dominates inbox write load, so the inbox store must be write-optimized.
 </KeyTakeaways>

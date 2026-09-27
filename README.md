@@ -9,10 +9,11 @@ It ships with one course, **System Design Mastery**:
 |                  |                                                     |
 | ---------------- | --------------------------------------------------- |
 | Parts / chapters | 5 / 50                                              |
-| Lessons          | 202, each with an inline quiz                       |
+| Lessons          | 208, each with an inline quiz (about 205,000 words) |
 | Chapter quizzes  | 45, including a 20-question final assessment        |
-| Quiz questions   | 913                                                 |
-| Diagrams         | 363 (rendered to SVG at build time, light and dark) |
+| Quiz questions   | 931                                                 |
+| Diagrams         | 488 (rendered to SVG at build time, light and dark) |
+| Points to ponder | 208 questions with reveal-on-click answers          |
 
 The platform is multi-course ready: a course is a self-contained folder of MDX files plus an outline.
 
@@ -83,7 +84,7 @@ src/
   components/
     ui/                     shadcn/ui primitives
     layout/                 Header, user menu, shell
-    mdx/                    Lesson widgets: Diagram, Slides, Callout, KeyTakeaways, Tabs (registry in index.ts)
+    mdx/                    Lesson widgets: Diagram, Slides, Callout, Ponder, KeyTakeaways, Tabs (registry in index.ts)
     theme/                  Light/dark theme provider and toggle
   features/                 Feature slices, each with a public index.ts
     auth/                   AuthService interface + Firebase adapter, guards, auth pages
@@ -137,6 +138,10 @@ flowchart LR
 
 <Callout type="tip">Callout types: note, tip, warning, interview.</Callout>
 
+<Ponder question="A question for the learner to think about?">
+  The answer, hidden until the learner reveals it.
+</Ponder>
+
 <KeyTakeaways>- Every lesson ends with key takeaways.</KeyTakeaways>
 ````
 
@@ -160,11 +165,11 @@ A question with several correct options becomes multi-select.
 
 - outline entries without files, and files without outline entries;
 - MDX that does not compile;
-- lessons under 350 words or without `<KeyTakeaways>`;
+- lessons under 450 words, without `<KeyTakeaways>` or without at least one `<Ponder>`;
 - invalid quizzes;
 - lesson quizzes outside 2–5 questions, chapter quizzes under 6 and a final assessment under 15.
 
-Mermaid gotchas: avoid `;` and `#` inside diagram text, and quote labels that contain punctuation.
+Mermaid gotchas: avoid `;` and `#` inside diagram text, and quote labels that contain punctuation. MDX gotcha: a literal `<` followed by a letter or digit (such as `<1%`) is parsed as a tag; write it out in words or put it in a code span.
 
 ### Adding a practice problem
 

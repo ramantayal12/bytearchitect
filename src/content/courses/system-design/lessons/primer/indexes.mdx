@@ -51,6 +51,21 @@ Every index must be updated on every insert, update and delete that touches its 
 When you propose a table in an interview, name its key indexes and the queries they serve: "Posts are keyed by post ID, with a secondary index on (author_id, created_at) for profile pages."
 </Callout>
 
+## The leftmost-prefix rule, by example
+
+With a composite index on `(user_id, created_at)`:
+
+| Query | Uses the index? |
+| --- | --- |
+| `WHERE user_id = 42` | Yes |
+| `WHERE user_id = 42 AND created_at > '2026-01-01'` | Yes, as a range within the user |
+| `WHERE user_id = 42 ORDER BY created_at DESC LIMIT 20` | Yes, reads 20 entries in order |
+| `WHERE created_at > '2026-01-01'` | No — the leading column is missing |
+
+<Ponder question="A write-heavy events table has nine secondary indexes, and inserts are slow. How would you decide which indexes to drop?">
+Check which queries actually use each index (most databases report index usage statistics), and weigh read benefit against write cost. Drop unused or redundant indexes (for example, an index on `(a)` when `(a, b)` exists), consider moving rarely needed analytical queries to a replica or warehouse, and keep only the indexes that serve latency-critical reads. Each dropped index removes one extra write per insert.
+</Ponder>
+
 <KeyTakeaways>
 - Indexes avoid full scans by letting the database navigate directly to matching rows.
 - B-trees support equality, range and ordered queries and power most relational databases.

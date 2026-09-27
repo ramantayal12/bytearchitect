@@ -49,9 +49,28 @@ flowchart LR
 
 Suppose a service must generate 10 million responses per day with 500 output tokens each: 5 billion output tokens per day, about 58,000 tokens per second on average and perhaps 150,000 at peak. If one GPU server generates about 3,000 tokens per second across its batched requests, peak load needs about 50 servers, before redundancy. Doubling the average response length doubles the fleet. Estimates like this make cost trade-offs concrete.
 
+## Why GPU memory limits concurrency
+
+The KV cache stores, for each token in each active request, key and value vectors for every layer. A rough estimate:
+
+```text
+KV bytes per token ≈ 2 (K and V) × layers × KV heads × head dimension × bytes per value
+Example model: 32 layers, 8 KV heads, head dimension 128, 16-bit values
+             ≈ 2 × 32 × 8 × 128 × 2 B ≈ 131 KB per token
+A 4,000-token conversation ≈ 512 MB of KV cache
+An 80 GB GPU holding ~16 GB of weights leaves ~60 GB → roughly 120 such conversations at once
+```
+
+Longer contexts mean fewer concurrent requests per GPU, which is why context length is a cost lever, and why techniques such as paged KV-cache allocation, prefix sharing and quantized caches matter so much in serving systems.
+
+<Ponder question="Two requests share the same 3,000-token system prompt and differ only in a short user question. How can a serving system exploit that?">
+With prefix caching, the KV cache for the shared 3,000-token prefix is computed once and reused for every request that starts with it, so each new request only prefills its short suffix. This cuts time to first token and GPU compute dramatically for applications with long, fixed instructions or shared documents, and it is why keeping stable content at the start of prompts is a useful optimization.
+</Ponder>
+
 <KeyTakeaways>
 - Part IV covers an LLM chat service, ML data infrastructure, a support bot and a code assistant.
 - Tokens, context windows, prefill and decode phases, KV caches, embeddings and RAG are the shared vocabulary.
 - SCALED adapts to AI by adding quality, safety and cost to scope, and token-based estimates to capacity.
 - GPU fleet size follows from tokens per second, so response length and traffic directly drive cost.
+- The KV cache grows with context length and batch size, so GPU memory — not compute alone — limits concurrency.
 </KeyTakeaways>

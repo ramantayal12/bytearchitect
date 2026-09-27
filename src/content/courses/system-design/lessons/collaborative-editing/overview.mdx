@@ -52,10 +52,26 @@ Real editors also handle:
 In a collaborative editing interview, show that you understand why naive "last write wins" or locking does not work for keystroke-level collaboration, then explain one of OT or CRDTs clearly.
 </Callout>
 
+## Why not just lock or use last-write-wins?
+
+| Approach | What happens | Why it fails for live editing |
+| --- | --- | --- |
+| Lock the whole document | One person edits at a time | Collaboration disappears; others wait |
+| Lock per paragraph | Users edit different paragraphs freely | Two people often edit the same paragraph; locks feel clunky and must be released reliably |
+| Last write wins on the whole document | Each save overwrites the previous | Concurrent edits are silently lost |
+| Last write wins per character | Positions shift as others type | Edits land in the wrong place or vanish |
+
+Keystroke-level collaboration requires merging concurrent edits so that all of them survive in sensible positions — the job of OT and CRDTs.
+
+<Ponder question="Why must each client apply its own edits locally before the server confirms them?">
+Typing must feel instant. A round trip to the server takes tens to hundreds of milliseconds, and waiting for it on every keystroke would make the editor feel broken, especially on mobile networks. Applying edits optimistically means the local document can temporarily differ from others' — which is exactly why a merging algorithm that guarantees convergence is needed.
+</Ponder>
+
 <KeyTakeaways>
 - Collaborative editors apply edits locally first, then share them, so concurrent edits are the norm.
 - Naively replaying position-based edits can fail or make copies diverge silently.
 - Editors must guarantee convergence of all copies while preserving each user's intention.
 - Operational transformation and CRDTs are the two main solutions.
 - Rich text, presence, comments, history, offline editing and permissions add further complexity.
+- Locking and last-write-wins either block collaboration or lose edits, so concurrent edits must be merged.
 </KeyTakeaways>

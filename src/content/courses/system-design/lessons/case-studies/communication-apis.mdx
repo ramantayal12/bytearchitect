@@ -75,10 +75,48 @@ Carriers send **delivery receipts** asynchronously, sometimes minutes later, and
 
 Regulations differ by country: registered sender IDs, quiet hours, consent requirements and mandatory opt-out keywords. The platform enforces these centrally. It also watches for fraud, such as traffic pumping, where attackers trigger verification messages to premium numbers they profit from, using rate limits per destination prefix and anomaly detection.
 
+## Message record and states
+
+| Field | Example |
+| --- | --- |
+| message_id | `SM9f1c...` |
+| tenant_id, idempotency_key | `acct_77`, `otp-user42-0927-1` |
+| to, from, channel | `+4915…`, registered sender, SMS |
+| body or template reference | "Your code is 482915" |
+| status | queued → sent → delivered, or failed or undelivered |
+| carrier, segments, price | carrier B, 1 segment, cost |
+| timestamps per transition | for latency metrics and billing |
+
+```mermaid
+stateDiagram-v2
+  [*] --> Queued
+  Queued --> Sent: accepted by carrier
+  Queued --> Failed: rejected (invalid number, opt-out)
+  Sent --> Delivered: delivery receipt
+  Sent --> Undelivered: carrier reports failure
+  Sent --> Sent: no receipt yet (timeout marks unknown)
+```
+
+## Estimates
+
+```text
+Messages per month:       5 billion → ~2,000/s average
+Burst from one customer:  10 million alerts in 10 minutes → ~17,000/s for that tenant
+Carrier connection limit: e.g. 100–1,000 messages/s per connection
+Delivery receipts:        roughly one per message, arriving seconds to hours later
+```
+
+The burst from a single customer exceeds the platform's average rate many times over, which is exactly why per-tenant queues and fair dispatching are essential: the burst drains at the tenant's share of capacity while other customers' messages keep flowing.
+
+<Ponder question="A customer's webhook endpoint is down for an hour while millions of status updates are generated for them. What should the platform do with those updates?">
+Queue them per customer and retry with exponential backoff, without letting that backlog affect other customers' webhooks. Keep updates durable for a bounded period (for example 24–72 hours), collapse multiple updates for the same message into the latest state where possible, and expose a status API so the customer can fetch what they missed after recovering. Alert the customer when their endpoint is failing.
+</Ponder>
+
 <KeyTakeaways>
 - A communication API accepts requests quickly, stores them and delivers asynchronously with status tracking.
 - Idempotency keys let customers retry API calls safely.
 - Per-tenant queues with weighted fair dispatching keep one large sender from delaying everyone else.
 - A routing engine chooses carriers by destination, cost and live health, respecting per-connection rate limits.
 - Signed, retried webhooks report delivery status, isolated per customer; compliance and fraud controls are enforced centrally.
+- A single customer's burst can exceed the platform average many times, so fairness per tenant is essential.
 </KeyTakeaways>

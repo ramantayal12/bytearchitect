@@ -56,10 +56,37 @@ flowchart TB
 
 Key metrics include queue depth per priority, scheduling delay (actual start time minus scheduled time), task success and failure rates, retry counts, and executor utilization. Alerting on **scheduling delay** catches capacity problems before users notice missed deadlines.
 
+## Failure scenarios
+
+| Failure | Effect | Recovery |
+| --- | --- | --- |
+| API server crashes during submit | Client gets an error or timeout | Client retries with the same idempotency key; no duplicate task |
+| Scheduler worker dies | Its partitions are not polled | Leases expire; other workers take over within seconds |
+| Executor dies mid-task | Task stuck in RUNNING | Lease expires; task retried (possibly resuming from a checkpoint) |
+| Queue unavailable | Due tasks cannot be dispatched | Tasks stay SCHEDULED or QUEUED in the store; dispatched when the queue returns |
+| Task store partition leader fails | Brief pause for that partition | Replica promoted; state machine resumes from persisted state |
+| Downstream dependency outage | Many tasks fail | Backoff spreads retries; circuit breakers pause dispatch for that handler |
+
+## Requirements summary
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Durability | Task written to a replicated store before the API returns |
+| At-least-once execution | Persisted state machine, leases, retries, dead-letter state |
+| Scalability | Partitioned store and scheduler workers, queues, autoscaled executors |
+| Availability | Stateless API and executors, partition lease reassignment, replicated queues |
+| Timeliness | One-second polling, timing wheels, priority queues, jitter |
+| Fairness and isolation | Quotas, fair queuing, containers with resource limits |
+
+<Ponder question="Users complain that 'reminders arrive a few minutes late every morning at 9:00'. Which metric would confirm the cause, and what would you change?">
+**Scheduling delay** (actual start minus scheduled time) broken down by priority and time of day would show a spike at 09:00, when many reminders and recurring jobs coincide. Give user-facing reminders a higher-priority queue with reserved executor capacity, add jitter to batch jobs that do not need to run exactly on the hour, and scale executors ahead of the known peak.
+</Ponder>
+
 <KeyTakeaways>
 - Durable storage of tasks and state transitions, plus leases and retries, provide reliability.
 - Partitioning, queues and autoscaled executors provide scalability.
 - Stateless replicated components and partition reassignment provide availability.
 - Polling, priority queues and jitter keep tasks timely; quotas and containers provide isolation.
 - Monitor scheduling delay, queue depth and failure rates.
+- Failure handling covers submits, scheduler workers, executors, queues, the store and downstream outages.
 </KeyTakeaways>

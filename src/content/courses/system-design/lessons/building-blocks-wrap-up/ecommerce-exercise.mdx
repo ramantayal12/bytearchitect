@@ -54,10 +54,28 @@ flowchart LR
 Notice how each block was justified by a specific requirement — read-heavy catalog, highly available cart, strongly consistent orders, slow asynchronous follow-ups. That habit is exactly what interviewers look for.
 </Callout>
 
+## Step 6: Surviving the seasonal sale
+
+**Question:** Traffic jumps tenfold for a flash sale on 1,000 discounted items. Which blocks absorb it, and where is the real bottleneck?
+
+**Discussion:** The CDN and cache absorb the jump in page views; stateless API servers autoscale. The true bottleneck is **inventory**: thousands of shoppers compete for the same few rows. Options include reserving stock atomically with conditional updates (`UPDATE stock SET qty = qty − 1 WHERE id = ? AND qty > 0`), splitting a hot item's stock into several **sharded counters** that are decremented independently, and putting a **queue** in front of checkout so orders are admitted at a rate the database can sustain, with a waiting-room page for the rest.
+
+| Estimate | Value |
+| --- | --- |
+| Normal checkout rate | ~200 orders per second |
+| Flash-sale peak | ~2,000 orders per second for a few minutes |
+| Product page views at peak | ~200,000 per second, mostly served by CDN and cache |
+| Hot inventory rows | ~1,000 items receiving most of the checkout attempts |
+
+<Ponder question="Why store the cart in a highly available key-value store but the order in a transactional database?">
+The cart tolerates brief inconsistency — merging two devices' additions is fine, and being able to add items at all times directly protects revenue — so availability wins. An order commits money and inventory; overselling or double-charging is costly and visible, so correctness wins. Choosing storage per data type, by the cost of each kind of error, is the central habit this exercise practices.
+</Ponder>
+
 <KeyTakeaways>
 - DNS, CDN, load balancers and rate limiters bring users to the service and protect it.
 - Catalog data uses a partitioned database plus cache; images use a blob store and CDN; search uses a distributed search cluster fed by change streams.
 - Carts suit a highly available key-value store; orders and inventory need a transactional database.
 - Pub-sub, queues and a task scheduler handle asynchronous and delayed work.
 - Monitoring, logging and sharded counters support operations and hot metrics.
+- The flash-sale bottleneck is hot inventory, handled with conditional updates, sharded stock counters and an admission queue.
 </KeyTakeaways>

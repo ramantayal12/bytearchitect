@@ -55,8 +55,29 @@ Real systems combine blocks into pipelines. A photo upload might touch a load ba
 When you are unsure how to approach a new design problem, walk through the table above. Ask which needs the product has, and which blocks address them. You will rarely need anything that is not on this list.
 </Callout>
 
+## Guarantees at a glance
+
+Knowing what each block **promises** — and what it does not — is what lets you combine them safely.
+
+| Block | Typical consistency | Typical delivery or durability | Watch out for |
+| --- | --- | --- | --- |
+| DNS | Eventual (TTL-bound) | Replicated, cached everywhere | Stale records during failover |
+| Distributed cache | Eventual with the database | Not durable | Stampedes, stale reads, hot keys |
+| Key-value store (Dynamo-style) | Tunable, eventual by default | Replicated N times | Conflicting versions |
+| Relational database | Strong (per primary) | Durable with WAL and replicas | Replica lag, write scaling |
+| Messaging queue | Per-message; FIFO optional | At least once | Duplicates, poison messages |
+| Pub-sub log | Ordered per partition | At least once; replayable | Consumer lag, rebalances |
+| Blob store | Read-after-write per object | Extremely durable | Listing lag, regional availability |
+| Search index | Eventual with its sources | Rebuildable | Freshness of deletes |
+| Sharded counters | Eventual totals | Durable with a log | Display lag, reconciliation |
+
+<Ponder question="A design writes an order to the database, deletes the cached order summary, and publishes an 'order placed' event. List two things that could go wrong between these steps and how the patterns in this lesson address them.">
+If the service crashes after the database write but before publishing, downstream services never hear about the order — fixed by the **transactional outbox** (asynchrony with idempotency). If a concurrent reader refills the cache with the old summary after the delete, the cache is stale — limited by **TTLs, leases or change-log-driven invalidation** (caching). Consumers receiving the event twice after a retry must be **idempotent**.
+</Ponder>
+
 <KeyTakeaways>
 - Six patterns recur across the building blocks: partitioning, replication, asynchrony, caching, idempotency and failure handling.
 - Each block packages these patterns for a common need, summarized in the quick-reference table.
 - Real designs compose many blocks; understanding each block's guarantees lets you reason about the whole.
+- Each block's guarantees — consistency, delivery, durability — determine how safely it composes with others.
 </KeyTakeaways>

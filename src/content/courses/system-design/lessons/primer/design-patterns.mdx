@@ -70,6 +70,24 @@ flowchart LR
 - **Consistent hashing** maps keys to nodes so that membership changes move few keys.
 - **Outbox pattern** writes an event to a table in the same transaction as the business change, then publishes it, ensuring events are never lost or sent for rolled-back changes.
 
+## Patterns by problem they solve
+
+| Problem | Pattern |
+| --- | --- |
+| Avoid expensive lookups for things that do not exist | Bloom filter |
+| Tune consistency against latency | Quorum (N, W, R) |
+| Single writer and ordering | Leader and followers, lease |
+| Detect failed nodes | Heartbeat, gossip |
+| Stop a stale leader from writing | Fencing token, generation number |
+| Survive crashes without losing acknowledged writes | Write-ahead log |
+| Find differences between replicas cheaply | Merkle tree |
+| Keep writing when a replica is down | Hinted handoff |
+| Publish events reliably with a database change | Outbox pattern |
+
+<Ponder question="Why is a lease safer than a lock without an expiry for electing a leader?">
+If a lock holder crashes or is partitioned away, a lock without expiry is never released, and no one else can take over — the system is stuck. A lease expires automatically, so another node can become leader after the timeout. The remaining danger — the old leader waking up and still acting — is handled by fencing tokens that let storage reject its writes.
+</Ponder>
+
 <KeyTakeaways>
 - Bloom filters answer "definitely not" cheaply; quorums with W + R greater than N give overlapping reads and writes.
 - Leaders with followers, heartbeats and leases coordinate ownership and detect failure.

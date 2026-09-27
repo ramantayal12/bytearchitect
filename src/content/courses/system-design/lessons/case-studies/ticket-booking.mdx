@@ -70,10 +70,47 @@ The waiting room turns an unmanageable spike into a steady flow, and gives users
 
 Bots try to buy tickets in bulk for resale. Defenses include per-account and per-payment-method purchase limits, CAPTCHA challenges before admission, device fingerprinting, verified-fan pre-registration, and detecting inhuman request patterns at the edge.
 
+## API and data model
+
+```http
+GET  /v1/events/{id}/seatmap                 -> sections, seats with availability (cacheable, slightly stale)
+POST /v1/events/{id}/holds  { seatIds, accessToken }   -> { holdId, expiresAt } | 409 seats taken
+POST /v1/holds/{holdId}/purchase { paymentToken, idempotencyKey } -> { orderId, tickets }
+DELETE /v1/holds/{holdId}
+```
+
+| Table | Key | Fields |
+| --- | --- | --- |
+| events | event_id | venue, start time, on-sale time, status |
+| seats | (event_id, seat_id) | section, row, price tier, status, hold_id, expires_at, version |
+| holds | hold_id | user_id, event_id, seat_ids, expires_at |
+| orders | order_id | user_id, hold_id, payment reference, status |
+
+Partitioning seats by event keeps every hold transaction for an event on one database partition, where conditional updates are cheap and atomic. A huge stadium event can be split by section if one partition becomes a bottleneck.
+
+## How many transactions does the database really see?
+
+With a waiting room admitting, say, 2,000 users per second, and each admitted user making one or two hold attempts, the inventory database handles a few thousand conditional updates per second — easily within one well-provisioned partition per event. Without the waiting room, two million simultaneous users retrying failed holds could generate hundreds of thousands of contended transactions per second on the same rows, and almost all would fail or time out.
+
+## Evaluation
+
+| Requirement | How the design meets it |
+| --- | --- |
+| No double booking | Atomic conditional updates on seat rows within one partition |
+| Availability under surge | Waiting room and admission control; cacheable seat maps |
+| Fairness | Randomized or ordered queue positions, purchase limits, bot defenses |
+| Abandoned carts | Expiring holds with lazy release and background cleanup |
+| Payment correctness | Idempotent purchase with the payment patterns from the payment chapter |
+
+<Ponder question="Two friends in the waiting room are admitted at different times. The first holds four seats together; the second tries to hold the seat next to them a minute later. What guarantees and what limits does the design have here?">
+The hold is atomic per request, so the first friend's four seats are either all held or none are — they cannot end up with a partial set. But the design makes no promise that the adjacent seat will still be free a minute later; another admitted user may take it. Group purchases are best made in one request by one person, which is why ticketing sites encourage buying for friends in a single order.
+</Ponder>
+
 <KeyTakeaways>
 - Seats move from available to held to sold; holds expire so abandoned carts free inventory.
 - Double booking is prevented with atomic conditional updates or optimistic concurrency on seat rows.
 - A virtual waiting room with an admission controller turns a massive surge into a steady, fair flow.
 - Availability displays can be cached, because the atomic hold operation is the final arbiter.
 - Purchase limits, challenges and bot detection protect fairness.
+- Partitioning seats by event keeps holds single-partition; admission control keeps contention within what that partition can handle.
 </KeyTakeaways>

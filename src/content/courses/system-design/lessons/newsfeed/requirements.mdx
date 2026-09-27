@@ -1,0 +1,79 @@
+---
+title: Requirements of a Newsfeed System
+---
+
+This lesson scopes the newsfeed and estimates its load — the **Scope** and **Capacity** steps of SCALED.
+
+## Functional requirements
+
+- **View feed:** users see a feed of posts from friends, followed pages and groups, plus some recommended content.
+- **Ranked order:** the feed is ranked by relevance, with fresh content favored; users can switch to a chronological view.
+- **Infinite scroll:** users can keep scrolling to load more items.
+- **Refresh:** new posts appear at the top when the user pulls to refresh, without duplicating what they have seen.
+- **Publish:** users create posts (text, photos, videos, links) with an audience setting (public, friends, custom lists).
+- **Interact:** users like, comment, share and hide posts; hiding affects future ranking.
+
+Out of scope: messaging, stories, the ads auction (though ads are inserted into the feed), and content moderation tooling — we note where each plugs in.
+
+## Non-functional requirements
+
+- **Low latency:** the first page renders in under about 500 ms end to end; subsequent pages as the user scrolls in under 200 ms.
+- **High availability:** an empty or broken feed is a broken product. A degraded feed (less personalized, slightly stale) is far better than none.
+- **Eventual consistency:** a new post may take a few seconds to reach friends' feeds.
+- **Strict integrity:** deleted posts, audience restrictions and blocks must never be violated, even briefly.
+- **Scalability:** billions of users, hundreds of connections each, and bursts during major events.
+
+## Capacity estimation
+
+| Assumption | Value |
+| --- | --- |
+| Daily active users | 1 billion |
+| Feed opens per user per day | 10 |
+| Items per feed page | 20 |
+| New posts per day | 500 million |
+| Average audience per post (friends and followers) | 300 |
+| Post metadata size | 1 KB (media stored separately) |
+
+**Feed requests:** 1 billion × 10 = 10 billion per day ≈ **115,000 per second** on average, and perhaps **350,000 per second** at peak.
+
+**Post writes:** 500 million ÷ 86,400 ≈ **5,800 per second**, bursting to several times that.
+
+**Fan-out if pushing to everyone:** 500 million × 300 = **150 billion inbox inserts per day** ≈ 1.7 million per second. Affordable for small audiences if inboxes hold only IDs, but not for pages with millions of followers.
+
+**Ranking work:** if each request scores 500 candidates with the heavy model, that is 350,000 × 500 = **175 million model evaluations per second** at peak — the single most expensive part of the system.
+
+**Storage:**
+
+| Data | Calculation | Size |
+| --- | --- | --- |
+| Post metadata | 500M × 1 KB per day | ~0.5 TB/day, ~180 TB/year |
+| Feed inboxes | 1B users × 500 IDs × 16 B (ID + score hint) | ~8 TB in memory |
+| Feature store (online) | ~1 KB of features per user plus per-post features | Tens of TB |
+| Interaction events | 10B feed opens × ~30 events | ~300B events/day into the event pipeline |
+
+<Callout type="note">
+The estimates point to three conclusions: inboxes must store IDs, not content; fan-out must treat large audiences differently; and ranking must be staged so that the expensive model sees only a few hundred candidates per request.
+</Callout>
+
+## Latency budget
+
+| Stage | Budget |
+| --- | --- |
+| Network and gateway | 100 ms |
+| Candidate retrieval (inbox, pulled sources, recommendations) | 50 ms |
+| Feature fetching | 40 ms |
+| Lightweight ranking (thousands → hundreds) | 20 ms |
+| Heavy ranking (hundreds) | 60 ms |
+| Rules, hydration of the top 20, response | 50 ms |
+| **Total server-side** | **~220 ms**, leaving room for rendering on the device |
+
+<Ponder question="Ranking dominates the compute cost. Why not rank once per hour per user in a batch job and serve the precomputed feed?">
+Feeds would be stale: posts from the last hour would be missing or poorly placed, and the feed would not react to what the user just did (hiding a post, lingering on videos). Precomputation is also wasteful for the many users who do not open the app in a given hour. Ranking at request time over precomputed candidates and features gives freshness and responsiveness while keeping per-request work bounded.
+</Ponder>
+
+<KeyTakeaways>
+- Core features: a ranked, infinitely scrolling feed from many sources, refresh without duplicates, publishing with audiences and interactions.
+- Latency and availability matter most; propagation can be eventual, but integrity rules must be strict.
+- Estimates: ~350,000 feed requests per second at peak, 1.7 million inbox inserts per second if pushing to everyone, and over 100 million model evaluations per second.
+- Inboxes store IDs, fan-out treats large audiences differently, and ranking is staged to fit a latency budget.
+</KeyTakeaways>

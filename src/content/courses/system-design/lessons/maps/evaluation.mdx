@@ -50,10 +50,27 @@ Rush hour creates predictable daily peaks; holidays and big events create less p
 A crisp summary for the end of a maps interview: "Tiles are a CDN problem, routing is a precomputation problem and traffic is a streaming problem." It shows you understood that one product hides three very different systems.
 </Callout>
 
+## Latency budget for a route
+
+| Step | Budget |
+| --- | --- |
+| Network from phone to nearest region | 60 ms |
+| Gateway and snapping endpoints | 10 ms |
+| Overlay search and shortcut unpacking (3 alternatives) | 50 ms |
+| ETA model inference | 20 ms |
+| Encoding the polyline and steps | 10 ms |
+| Network back to the phone | 60 ms |
+| **Total** | **~210 ms, well within the one-second target** |
+
+<Ponder question="A driver's phone loses signal for 20 minutes in a rural area. What should the app do, and what did the design include to make it possible?">
+Keep navigating: the app already holds the route geometry, turn instructions and the tiles along the route, so it can follow the GPS position locally, announce turns and update the ETA from its own speed. If the driver leaves the route, it can compute a simple local reroute on cached data or wait for connectivity. The design makes this possible by returning the full route up front and caching tiles along it, rather than streaming instructions turn by turn.
+</Ponder>
+
 <KeyTakeaways>
 - The design meets latency needs with CDN-served tiles and an in-memory partitioned graph for routing.
 - Route profiles such as "avoid tolls" need separate weight sets, trading memory for speed.
 - Rerouting thresholds balance fresh traffic with stable guidance.
 - Failures degrade gracefully: stale traffic falls back to history, and clients continue navigation offline.
 - Routing servers load large graphs on start-up, so capacity should be scaled proactively before predictable peaks.
+- A route request fits in a few hundred milliseconds; clients carry enough data to navigate through connectivity gaps.
 </KeyTakeaways>

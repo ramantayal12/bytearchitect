@@ -42,10 +42,24 @@ flowchart LR
 When asked about reliability in an interview, cite concrete failure modes such as correlated health checks, shared-fate recovery tools and recovery surges. They show you understand how real outages unfold.
 </Callout>
 
+## Applying the lessons to your own design
+
+| Pattern in the outage | Question to ask of any design |
+| --- | --- |
+| Every DNS site withdrew itself at once | If every instance's health check fails for the same reason, does the whole service disappear? |
+| One command could reach the entire backbone | What is the largest blast radius of a single operation, and what stops it? |
+| Recovery tools needed the failed network | Can we diagnose and fix production if production's network, DNS and authentication are all down? |
+| Recovery risked a surge | Can we bring service back gradually, or does everything reconnect at once? |
+
+<Ponder question="How could the DNS sites' 'withdraw if unhealthy' rule be changed so that it still removes genuinely broken sites but cannot remove all of them at once?">
+Make the decision aware of the global picture: a site withdraws only if it is unhealthy *and* enough other sites remain healthy (for example, a coordinator or a peer quorum confirms that at least N sites will keep advertising), or cap the fraction of sites that can withdraw within a time window. A last-resort rule — if everyone appears unhealthy, keep advertising, because the problem is probably not local — prevents a correlated failure from turning into total disappearance.
+</Ponder>
+
 <KeyTakeaways>
 - A maintenance command disconnected the backbone, and a buggy audit tool failed to stop it.
 - DNS servers withdrew their BGP routes because they judged themselves unhealthy, making every domain unresolvable.
 - Recovery was slowed by lost remote access, physical security and the need for gradual reactivation.
 - Local health rules can fail globally; dangerous commands need layered safeguards and limited blast radius.
 - Recovery tools must not share fate with production, and recovery itself must be staged and rehearsed.
+- Every design should be checked for correlated health checks, large blast radii, shared-fate recovery tools and recovery surges.
 </KeyTakeaways>

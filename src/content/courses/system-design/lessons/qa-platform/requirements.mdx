@@ -55,6 +55,10 @@ At a peak of 35,000 page views per second and around five backend calls per view
 The key conclusions: text data is modest, media data is large but simple, and traffic is dominated by reads of question pages, many from anonymous visitors. Those facts point towards aggressive caching of pages for anonymous readers and a blob store with a CDN for media.
 </Callout>
 
+<Ponder question="The estimates show only about 3 TB of text per year. Why not keep everything in one large relational database indefinitely?">
+Storage is not the problem — throughput and availability are. At peak, hundreds of thousands of backend reads per second and hundreds of writes per second (with viral bursts on single answers) would overwhelm one primary, and a single database is a single point of failure for the whole site. Caching absorbs most reads, but write hot spots and the need for regional resilience eventually push the design towards sharding, as the final design shows.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are asking, answering, voting, commenting, following, a personalized feed and search.
 - Reads dominate, with a read-to-write ratio well above 10:1 and much traffic from anonymous search visitors.

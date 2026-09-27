@@ -3,6 +3,7 @@ import { Callout } from './Callout/Callout'
 import { Diagram } from './Diagram/Diagram'
 import { KeyTakeaways } from './KeyTakeaways/KeyTakeaways'
 import { MermaidFigure } from './MermaidFigure/MermaidFigure'
+import { Ponder } from './Ponder/Ponder'
 import { Slide, Slides } from './Slides/Slides'
 import { Tab, TabGroup } from './Tabs/TabGroup'
 import { TableWrapper } from './TableWrapper'
@@ -16,6 +17,7 @@ export const mdxComponents: MDXComponents = {
   Diagram,
   KeyTakeaways,
   MermaidFigure,
+  Ponder,
   Slide,
   Slides,
   Tab,

@@ -12,6 +12,7 @@ Let's define the requirements for a general-purpose blob store serving many appl
 - **Delete a blob.**
 - **List blobs** in a container, optionally filtered by name prefix.
 - **Access control** — private blobs, public blobs and time-limited signed URLs.
+- **Versioning** (optional) — keep previous versions when a blob is overwritten or deleted.
 
 ```text
 createContainer(account, container)
@@ -22,6 +23,16 @@ deleteBlob(container, name)
 listBlobs(container, prefix, pageToken)            -> names, nextPageToken
 ```
 
+Over HTTP this looks like:
+
+```http
+PUT    /photos-app/user-uploads/u42/2024/beach.jpg      (body: bytes)
+GET    /photos-app/user-uploads/u42/2024/beach.jpg
+       Range: bytes=0-1048575
+DELETE /photos-app/user-uploads/u42/2024/beach.jpg
+GET    /photos-app/user-uploads?prefix=u42/2024/&max-keys=1000&page-token=...
+```
+
 ## Non-functional requirements
 
 - **Durability.** Once written, data must essentially never be lost — targets like eleven nines (99.999999999%) annual durability are common.
@@ -29,10 +40,13 @@ listBlobs(container, prefix, pageToken)            -> names, nextPageToken
 - **Scalability.** Billions of blobs, exabytes of data and millions of requests per second.
 - **Throughput.** High bandwidth for large uploads and downloads, parallelizable across servers.
 - **Cost efficiency.** Storage cost per gigabyte must be low, since data volume is enormous.
+- **Consistency.** After a successful upload, reads should return the new data (read-after-write).
 
 <Callout type="note">
 Durability and availability are different. A blob can be perfectly durable (safely stored in several places) yet temporarily unavailable (the servers holding it are unreachable). Blob stores typically target far higher durability than availability.
 </Callout>
+
+What does eleven nines mean in practice? If you store 10 million objects, you can expect to lose one object about once every 10,000 years. Achieving it requires redundancy across failure domains, continuous checking and fast repair — the subject of the next lessons.
 
 ## Capacity snapshot
 
@@ -45,6 +59,8 @@ Suppose a video platform uploads 500 hours of video every minute, stored at an a
 ```
 
 With naive three-way replication that would be over 780 PB per year — which is why cost-efficient redundancy schemes such as **erasure coding** matter so much at this scale.
+
+The metadata side has its own numbers. If the store holds 100 billion objects with about 500 bytes of metadata each (name, size, owner, chunk locations, timestamps), metadata alone is about **50 TB** — far too large for one database, and read on every access. Metadata must be partitioned and cached just like the data.
 
 ## Handling large objects
 
@@ -62,9 +78,35 @@ flowchart LR
   CN --> S3[(Server C)]
 ```
 
+### Multipart upload flow
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant BS as Blob store
+  C->>BS: initiateUpload(container, name)
+  BS-->>C: uploadId
+  par parts in parallel
+    C->>BS: uploadPart(uploadId, 1, bytes)
+    BS-->>C: etag1
+  and
+    C->>BS: uploadPart(uploadId, 2, bytes)
+    BS-->>C: etag2
+  end
+  C->>BS: completeUpload(uploadId, [1 etag1, 2 etag2, ...])
+  BS-->>C: blob committed (visible now)
+```
+
+The blob becomes visible only when `completeUpload` succeeds, so readers never see a partial object. Uploads that are never completed are cleaned up after a timeout.
+
+<Ponder question="A user uploads a 4 GB video over a mobile connection that drops every few minutes. How does chunking change the experience compared with a single PUT?">
+With a single PUT, every drop restarts the whole 4 GB transfer, and the upload may never finish. With 16 MB parts, a drop costs at most one part's progress: the client asks which parts were stored, resends only the missing ones, and can upload several parts in parallel to use the available bandwidth. The upload survives app restarts too, as long as the upload ID is saved.
+</Ponder>
+
 <KeyTakeaways>
-- Core operations: containers, put, get (with ranges), delete, list and access control.
+- Core operations: containers, put, get (with ranges), delete, list, access control and optional versioning, exposed over HTTP.
 - Durability targets are extremely high; availability targets are high but lower.
-- The system must scale to billions of blobs and exabytes while keeping cost per gigabyte low.
+- The system must scale to billions of blobs and exabytes while keeping cost per gigabyte low; metadata alone can reach tens of terabytes.
 - Large objects are split into chunks for parallel, resumable uploads spread across servers.
+- Multipart uploads make a blob visible only on completion, so readers never see partial objects.
 </KeyTakeaways>

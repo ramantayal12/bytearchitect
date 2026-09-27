@@ -51,10 +51,28 @@ At ten times the traffic, the first pressure points would be egress capacity at 
 When defending a design, pair each trade-off with the reason it fits this product: “We accept stale like counts because nobody makes a decision based on the exact number, and it lets us serve counts from a cache.”
 </Callout>
 
+## Time to first frame
+
+| Step | Budget |
+| --- | --- |
+| Fetch watch-page metadata (cached, nearby region) | 100 ms |
+| DNS and connection to the CDN edge (often already warm) | 50 ms |
+| Download the manifest | 50 ms |
+| Download the first segment at a low starting bitrate | 300 ms |
+| Decode and render the first frame | 100 ms |
+| **Total** | **~600 ms, well under the two-second target** |
+
+Starting at a modest bitrate and shortening the first segment trades a slightly softer first second of video for a much faster start; the player then climbs the ladder.
+
+<Ponder question="Egress costs are the biggest line item. Name three levers in this design that reduce them, and the trade-off of each.">
+(1) More efficient codecs for popular videos — fewer bytes per minute, but more encoding CPU. (2) Per-title encoding — lower bitrates for simple content at equal quality, at the cost of analysis per video. (3) Higher CDN byte hit ratio, including caches inside ISPs — less origin and transit traffic, at the cost of operating or paying for more edge capacity. Adaptive bitrate also avoids sending 4K to a phone screen.
+</Ponder>
+
 <KeyTakeaways>
 - Playback availability comes from CDN edges, replicated metadata and multi-region failover.
 - Adaptive bitrate and small first segments keep start-up latency low and prevent rebuffering.
 - The design trades storage for bandwidth, publishing latency for throughput and consistency for cheap reads.
 - Tiered caching, proactive pushing and request coalescing tame both the long tail and viral spikes.
 - Idempotent, queue-driven processing means failures delay work but never lose it.
+- Time to first frame fits comfortably within two seconds when metadata and first segments come from nearby caches.
 </KeyTakeaways>

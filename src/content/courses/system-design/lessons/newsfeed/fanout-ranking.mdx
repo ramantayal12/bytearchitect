@@ -67,6 +67,22 @@ After scoring, rules prevent too many consecutive posts from the same author or 
 
 Features come from a **feature store** with two layers: batch features computed daily, such as long-term affinity, and real-time features updated from event streams, such as a post's engagement in the last ten minutes. Models are retrained frequently on logged impressions and outcomes, and new models are evaluated in **A/B tests** that compare engagement and satisfaction metrics before rollout.
 
+## A ranking example
+
+Three candidates for one viewer, with predicted probabilities from the heavy model and weights `w1 = 1` (like), `w2 = 4` (comment), `w3 = 6` (share), `w4 = 0.5` (long dwell), `w5 = 10` (hide):
+
+| Candidate | P(like) | P(comment) | P(share) | P(dwell > 10 s) | P(hide) | Score |
+| --- | --- | --- | --- | --- | --- | --- |
+| Close friend's wedding photo | 0.40 | 0.10 | 0.02 | 0.60 | 0.01 | 0.40 + 0.40 + 0.12 + 0.30 − 0.10 = **1.12** |
+| Viral meme from a page | 0.30 | 0.02 | 0.05 | 0.20 | 0.03 | 0.30 + 0.08 + 0.30 + 0.10 − 0.30 = **0.48** |
+| Acquaintance's long article | 0.05 | 0.01 | 0.01 | 0.30 | 0.02 | 0.05 + 0.04 + 0.06 + 0.15 − 0.20 = **0.10** |
+
+The high weight on comments reflects a product choice to favor conversation between people who know each other; the penalty on hides keeps annoying content down even when it would attract clicks.
+
+<Ponder question="Why are some features computed in real time from event streams rather than in the daily batch job?">
+Some signals change within minutes and matter immediately: a post's engagement velocity in its first ten minutes, whether the viewer just hid a similar post, or a breaking-news topic surging right now. A daily batch would miss them entirely. Stable signals such as long-term affinity between two people change slowly and are cheaper to compute in batch. Combining both gives fresh responsiveness without recomputing everything continuously.
+</Ponder>
+
 <Callout type="interview">
 You are not expected to design the model itself. Explain the multi-stage structure, the kinds of signals, how features are served with low latency, and how feedback flows back into training.
 </Callout>

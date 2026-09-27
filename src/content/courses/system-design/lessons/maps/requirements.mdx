@@ -51,9 +51,26 @@ The estimates show three very different workloads: a massive, cacheable read wor
 
 If one routing server with an in-memory, preprocessed graph answers about 500 queries per second, the 70,000-per-second peak needs about 140 servers, plus redundancy. Each routing server must hold the preprocessed graph for its region in memory, which drives the choice of large-memory machines and regional partitioning. Ingesting 10 million pings per second requires a partitioned streaming platform with hundreds of partitions.
 
+## How many tiles are there?
+
+Each zoom level has `4^z` tiles: 1 at zoom 0, about 1 million at zoom 10, about 69 billion at zoom 18. Most of the planet is ocean or empty land, and many high-zoom tiles are never viewed, so tiles are generated for populated areas and on demand elsewhere. Vector tiles also shrink storage because one tile's geometry can be rendered at several display sizes and styles on the client.
+
+| Zoom | Tiles worldwide | Typical view |
+| --- | --- | --- |
+| 0 | 1 | Whole world |
+| 5 | ~1,000 | Continent |
+| 10 | ~1 million | Metropolitan area |
+| 15 | ~1 billion | Streets |
+| 18 | ~69 billion | Buildings |
+
+<Ponder question="Ten million location pings per second sounds enormous. Could the service simply sample fewer pings?">
+For traffic estimation, yes to a degree: a busy highway segment gets far more pings than needed, so pings can be sampled or aggregated on the device. But navigation for each user still needs frequent position updates to detect missed turns quickly, and quiet roads need every ping they can get. A practical design batches pings on the device (fewer requests), keeps full resolution for the user's own navigation, and down-samples only where coverage is already dense.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are map viewing, place search, directions, turn-by-turn navigation and live traffic.
 - Latency, availability and ETA accuracy are the most important non-functional requirements.
 - Tiles are a huge but cacheable read load; routing is CPU- and memory-intensive; location pings are a heavy streaming write load.
 - Estimates suggest tens of thousands of route requests and around 10 million location pings per second at peak.
+- Tile counts grow as 4^z, so high-zoom tiles are generated for populated areas and on demand.
 </KeyTakeaways>

@@ -57,6 +57,10 @@ Storing only post IDs in timelines is what makes push fan-out affordable. The po
 
 Each timeline view returns perhaps 20 posts of about 1 KB of text and metadata, so about 20 KB per view without media, or 3 GB per second at peak. Media is served by the CDN and dominates total bandwidth.
 
+<Ponder question="Why do timelines store only post IDs rather than full post contents?">
+A post is written once but appears in hundreds or millions of timelines. Storing full contents in each would multiply storage (1 KB × 200 followers per post instead of 8 bytes × 200), and edits, deletions and count updates would have to touch every copy. Storing IDs keeps timelines tiny enough to live in memory and lets a single post cache serve the content to everyone.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are posting, following, home and user timelines, engagement, search, trends and notifications.
 - Availability and low latency matter more than strict consistency; posts may take seconds to reach followers.

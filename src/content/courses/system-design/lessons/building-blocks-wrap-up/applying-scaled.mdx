@@ -54,9 +54,37 @@ For each problem:
 2. Compare your design with the lessons, noting differences in requirements, building blocks and deep dives.
 3. Take the chapter quiz, then revisit the problem a week later from scratch.
 
+## A two-minute SCALED sketch: a notification service
+
+To see how quickly the framework produces a skeleton, consider "design a service that sends push, email and SMS notifications for other teams".
+
+- **Scope:** send single or bulk notifications, respect user preferences and quiet hours, track delivery. Non-functional: 1 billion notifications a day, never lose one, no duplicates visible to users where avoidable, per-channel rate limits imposed by providers.
+- **Capacity:** 1 billion per day ≈ 11,600 per second on average; bulk campaigns cause 10× peaks.
+- **API:** `send(userId, template, channel?, idempotencyKey)`, `sendBulk(segment, template, schedule)`, `status(notificationId)`.
+- **Layout:** API → **queue** per channel → channel workers → third-party providers; a **task scheduler** for scheduled campaigns; a preferences **cache**; **rate limiters** per provider; a **key-value store** for delivery status.
+- **Evolve:** deduplication with idempotency keys, retries with backoff when providers throttle, prioritizing password resets over marketing.
+- **Defend:** at-least-once delivery with idempotent sends, isolation between channels so an SMS provider outage does not delay emails, and monitoring of queue lag per channel.
+
+```mermaid
+flowchart LR
+  T[Other teams] --> API[Notification API] --> P[(Preferences cache)]
+  API --> QP[[Push queue]] & QE[[Email queue]] & QS[[SMS queue]]
+  QP --> WP[Push workers] --> APNS[Push providers]
+  QE --> WE[Email workers] --> ESP[Email provider]
+  QS --> WS[SMS workers] --> SMS[SMS provider]
+  SCH[Task scheduler] --> API
+```
+
+Every box is a building block you now understand; the design work was choosing them and naming the hard parts.
+
+<Ponder question="An interviewer gives you a problem you have never seen: 'design a system that tracks packages for a delivery company'. How can recognizing its archetypes help you start?">
+It combines archetypes you know: write-heavy ingestion (scan events and GPS updates from vans), geospatial (where is the van now, which packages are nearby), and read-heavy lookups (customers checking status, mostly for recent packages). That immediately suggests a partitioned event stream for scans, a location index for vans, a status store keyed by tracking number with a cache, and push notifications on status changes — a solid skeleton before any detail work.
+</Ponder>
+
 <KeyTakeaways>
 - SCALED maps onto each design chapter: requirements, design, detailed design and evaluation.
 - Most problems fit an archetype whose characteristic hard part deserves deep-dive time.
 - Adapt the framework to the problem type: scope large problems, emphasize algorithms for infrastructure, and transactions for consistency-critical systems.
 - Practice each problem yourself before reading, then revisit it later.
+- Even a two-minute SCALED sketch produces a defensible skeleton built entirely from known blocks.
 </KeyTakeaways>

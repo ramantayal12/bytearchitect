@@ -48,10 +48,26 @@ We will design the problem and submission services, the queue-based judging pipe
 The security of running untrusted code is the centerpiece of this problem. Interviewers expect a layered answer: containers or micro-VMs, no network, resource limits, syscall filtering and disposable environments.
 </Callout>
 
+## Verdicts and what they mean
+
+| Verdict | Cause | Detected by |
+| --- | --- | --- |
+| Accepted | Correct output on every test within limits | Output comparison or checker |
+| Wrong Answer | Output differs from expected on some test | Output comparison or checker |
+| Time Limit Exceeded | CPU time above the limit | CPU-time accounting in the sandbox |
+| Memory Limit Exceeded | Peak memory above the limit | cgroup memory accounting |
+| Runtime Error | Crash, uncaught exception, non-zero exit | Exit status and signals |
+| Compilation Error | Code does not compile | Compiler exit status and output |
+
+<Ponder question="Why do many problems need a custom checker rather than comparing output byte for byte?">
+Many problems have several correct answers — "print any shortest path", "output the result with an absolute error below 1e-6", or answers in any order. Byte comparison would reject valid solutions. A checker program reads the input, the expected answer and the user's output, and decides whether the user's output satisfies the problem's conditions. The checker itself must be trusted code, and it runs outside the user's sandbox.
+</Ponder>
+
 <KeyTakeaways>
 - An online judge compiles and runs user code against hidden tests under time and memory limits and returns a verdict.
 - Running untrusted code safely requires strong sandboxing.
 - Limits must be measured fairly and reproducibly across machines.
 - Contests create bursty load, especially near deadlines.
 - Run and submit share execution infrastructure but differ in test sets and importance.
+- Each verdict maps to a specific detection mechanism in the sandbox or comparison step.
 </KeyTakeaways>

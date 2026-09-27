@@ -47,10 +47,25 @@ The newsfeed chapter that follows generalizes timelines into ranked feeds.
 The fan-out decision is the pivotal moment in a microblogging interview. State both options, quantify their costs using the follower distribution, then propose the hybrid.
 </Callout>
 
+## Why the skew matters
+
+| Account type | Share of accounts | Followers | Cost of one post with push fan-out |
+| --- | --- | --- | --- |
+| Typical user | ~99% | 10–1,000 | Up to 1,000 inserts — trivial |
+| Popular creator | under 1% | 10,000–1,000,000 | Up to a million inserts — noticeable, spread over seconds |
+| Celebrity | A few tens of thousands | 1–100 million+ | Tens of millions of inserts — a spike that delays everyone else's fan-out |
+
+One celebrity post can generate more fan-out work than a million ordinary posts combined. Designs that treat every account the same will be dominated by their tail.
+
+<Ponder question="A celebrity with 80 million followers posts during a major event. With pure fan-out on write at 1 million timeline inserts per second, how long until the last follower's timeline includes the post, and what else suffers?">
+About 80 seconds of the entire fan-out capacity — during which every other author's posts queue behind it, so ordinary users' followers see posts late too. Several celebrities posting at once makes it worse. The hybrid approach avoids this by not pushing celebrity posts at all and merging them in at read time from a small, very hot cache.
+</Ponder>
+
 <KeyTakeaways>
 - A microblogging service is read-heavy, bursty and built around a skewed follower graph.
 - Timelines can be built by fan-out on write (push) or fan-out on read (pull).
 - Push makes reads cheap but multiplies writes; pull makes writes cheap but reads expensive.
 - Most systems use a hybrid: push for ordinary accounts and pull for accounts with huge followings.
 - Search and trending topics require near-real-time processing of the post stream.
+- A tiny fraction of celebrity accounts can dominate fan-out cost, so the design must treat them differently.
 </KeyTakeaways>

@@ -54,10 +54,28 @@ flowchart LR
 Two exercises, many of the same building blocks. The skill being practiced is mapping requirements to blocks and justifying each choice in a sentence. With practice, this mapping takes only a few minutes in an interview.
 </Callout>
 
+## Step 6: Estimating the load
+
+**Question:** Which numbers drive the design?
+
+| Estimate | Calculation | Result |
+| --- | --- | --- |
+| Daily active learners | 10 million registered, 20% active | 2 million per day |
+| Video watch bandwidth | 1 million concurrent at peak × 2 Mbps | ~2 Tbps — only feasible through a CDN |
+| Progress writes | 2 million learners × 10 lesson or quiz events | 20 million per day ≈ 230 per second |
+| Video storage | 50,000 hours × ~2 GB per hour across resolutions | ~100 TB in the blob store |
+
+The estimates confirm the shape of the design: the CDN carries almost all bytes, the progress store has a modest write rate that a partitioned document store handles easily, and the blob store holds a large but slowly growing library.
+
+<Ponder question="A learner completes the final lesson, but the certificate email never arrives. Where would you look, and what design property makes the failure recoverable?">
+Follow the event: did the progress service publish "course completed" (check its logs by trace ID)? Did the certificate consumer receive it (consumer lag, dead-letter queue)? Did PDF generation or the email call fail (error logs, retries)? Because the completion was published to a durable pub-sub topic and consumers are idempotent, fixing the bug and replaying or redriving the event regenerates the certificate without any data loss.
+</Ponder>
+
 <KeyTakeaways>
 - Videos flow through a blob store, transcoding queue and CDN; static lesson content is cacheable.
 - Progress is best stored per learner and course in a partitioned key-value or document store.
 - Forums use a partitioned database, cache, search and time-ordered IDs.
 - Course completion events drive certificates and emails through pub-sub; a scheduler sends reminders.
 - Rate limiting, monitoring, logging and counters support security and operations.
+- Estimates confirm that the CDN carries almost all bytes while progress writes stay modest.
 </KeyTakeaways>

@@ -93,10 +93,43 @@ flowchart TB
   Stream --> Indexer["Indexer"] --> Idx
 ```
 
+## Ranking answers with confidence
+
+Sorting by net votes (up minus down) favors old answers that had more time to collect votes; sorting by the ratio of upvotes favors answers with a single upvote (100%). A common fix is the **lower bound of the Wilson score interval**: it estimates, with a chosen confidence, the lowest plausible "true" fraction of positive votes.
+
+```text
+p = upvotes / n,  z = 1.96 (95% confidence)
+score = (p + z²/2n − z × sqrt(p(1 − p)/n + z²/4n²)) / (1 + z²/n)
+```
+
+| Answer | Up | Down | Ratio | Wilson lower bound |
+| --- | --- | --- | --- | --- |
+| A | 5 | 0 | 100% | ~0.57 |
+| B | 480 | 20 | 96% | ~0.94 |
+| C | 60 | 40 | 60% | ~0.50 |
+
+Answer B ranks first because its high ratio is backed by many votes; A's perfect ratio is uncertain with only five votes. Production ranking then blends this with author credibility on the topic and reading-time signals.
+
+## Where each piece of data lives
+
+| Data | Store | Partition key | Why |
+| --- | --- | --- | --- |
+| Questions, answers, scores | Sharded relational DB | question_id | A question page reads one shard |
+| Votes (who voted on what) | Key-value or wide-column store | (user_id, answer_id) | Dedup and "did I vote?" lookups |
+| Vote and content events | Partitioned event stream | answer_id or question_id | Ordered per item, replayable |
+| Home feeds | Feed store | user_id | One read per feed page |
+| Rendered anonymous pages | CDN edge cache | URL | Offloads most reads |
+| Search index | Distributed search | Document ID | Full-text and duplicate detection |
+
+<Ponder question="A user upvotes an answer and immediately refreshes the page, but the score has not changed because votes are aggregated every few seconds. How would you avoid confusing them?">
+Show the user's own vote state from the votes store (which is written synchronously) — the arrow stays highlighted — and apply the +1 optimistically in the client. The aggregated score catches up within seconds. Users see their action reflected instantly while the expensive shared counter is updated in batches.
+</Ponder>
+
 <KeyTakeaways>
 - The initial design strains at the single primary, synchronous side effects, request-time feeds, long-tail misses and single-region deployment.
 - Sharding by question ID keeps a question page on one shard.
 - Votes become events aggregated in batches, removing hot-row contention on viral answers.
 - Answer ranking uses confidence-adjusted votes, credibility and engagement, and is cached per question.
 - Feeds are precomputed with a hybrid fan-out, and anonymous pages are cached at the edge.
+- Wilson-score lower bounds rank answers by confidence-adjusted approval rather than raw votes or ratios.
 </KeyTakeaways>

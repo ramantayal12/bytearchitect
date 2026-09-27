@@ -89,10 +89,37 @@ During bake time, the health analyzer compares the new version's error rate, lat
 - **Audit and security:** every deployment is recorded with author, commit and approvals; agents run only signed artifacts from the trusted repository.
 - **Emergency path:** a fast rollback path skips normal bake times, and the deployment system itself runs in several regions with minimal dependencies.
 
+## Deciding whether a wave is healthy
+
+Comparing the new version with the old requires care: a slightly higher error rate could be noise. The health analyzer compares **canary** hosts running the new version with **baseline** hosts running the old version that receive similar traffic at the same time, so time-of-day effects cancel out.
+
+| Metric | Baseline | Canary | Verdict |
+| --- | --- | --- | --- |
+| Error rate | 0.20% | 0.22% | Within noise — pass |
+| p99 latency | 180 ms | 410 ms | Significant regression — fail |
+| Crash loops | 0 | 0 | Pass |
+| Orders per minute per host | 12.1 | 12.0 | Pass |
+
+A statistical test (for example, comparing distributions rather than single values) decides whether differences are significant. One failed critical metric is enough to halt and roll back.
+
+## Deploying schema and configuration changes
+
+Code rollouts mix old and new versions for a while, so data changes must work with both:
+
+- **Database schema changes** follow expand and contract: add the new column first (compatible with old code), deploy code that writes both, backfill, switch reads, then remove the old column in a later deployment.
+- **Configuration changes** go through the same progressive waves and health checks as code — many major outages have been caused by a configuration push applied everywhere at once.
+- **Feature flags** let new code ship dark and be enabled gradually by percentage, independently of deployment.
+
+<Ponder question="A new version passes canary checks on 1% of hosts but causes a memory leak that crashes processes only after six hours. How could the rollout process catch this?">
+Short bake times would miss it. Longer bake times for early waves (hours rather than minutes), monitoring trends such as memory growth rather than only current values, and keeping part of the fleet on the old version long enough to compare, all help. Automatic rollback triggered by crash-rate alerts limits the damage if it slips through; progressive waves ensure that when it does, only part of the fleet is affected.
+</Ponder>
+
 <KeyTakeaways>
 - Builds produce signed, immutable artifacts; a controller turns deployments into waves.
 - Hosts reconcile actual state to desired state, which makes rollouts and rollbacks robust to failures.
 - Peer-assisted distribution, regional caches and pre-staging avoid overloading the artifact repository.
 - Progressive waves with bake times and automatic comparison of new and old versions limit the blast radius.
 - One deployment per service at a time, capacity limits, audit trails and an emergency rollback path keep deployments safe.
+- Canary analysis compares new and old versions side by side with statistical tests.
+- Schema and configuration changes need the same progressive, backward-compatible rollout as code.
 </KeyTakeaways>

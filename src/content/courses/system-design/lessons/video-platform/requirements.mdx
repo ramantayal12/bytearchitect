@@ -57,9 +57,29 @@ Metadata requests, such as loading the watch page, fetching comments and recordi
 
 Encoding is CPU-heavy. If encoding one minute of video into the full ladder takes around two CPU-minutes, then 5 million uploads × 5 minutes × 2 CPU-minutes is 50 million CPU-minutes per day, or about 35,000 CPU cores busy around the clock. This is why encoding runs on a large, elastic worker fleet fed by a queue.
 
+## Estimates at a glance
+
+| Quantity | Estimate | Design consequence |
+| --- | --- | --- |
+| Views | ~29,000/s average, ~90,000/s peak | Watch path must be served from caches and CDN |
+| Uploads | ~58/s | Upload API is small; encoding is the heavy part |
+| New raw storage | ~1.25 PB/day | Scalable blob store with lifecycle tiers |
+| Egress | ~11 Tbps average | CDN is mandatory; bitrate efficiency is money |
+| Metadata requests | ~900,000/s peak | Sharded metadata DB behind a cache |
+| Encoding | ~35,000 CPU cores continuously | Elastic worker fleet fed by a queue |
+
+### Metadata and engagement storage
+
+Metadata is tiny next to video bytes, but not negligible. With 5 million new videos a day at about 2 KB of metadata each, the catalog grows by roughly 10 GB per day — about 3.6 TB per year, easily handled by a sharded database. Comments and likes are larger in count: if each view generates 0.1 engagement events of about 200 bytes, that is 250 million events and roughly 50 GB per day, which suits a write-optimized wide-column store.
+
+<Ponder question="If the platform stopped keeping the original uploads and kept only the encoded renditions, what would it gain and lose?">
+It would roughly halve storage growth (the originals are about as large as the whole encoded ladder). It would lose the ability to re-encode from the highest-quality source when better codecs or per-title encoding arrive, and re-encoding from an already compressed rendition compounds quality loss. Many platforms keep originals but move them to cheap archive tiers after the initial encode.
+</Ponder>
+
 <KeyTakeaways>
 - Scope the core features: upload, watch, search, engagement and channels; defer recommendations and live video.
 - Playback needs high availability and low latency; durability is non-negotiable for uploads; engagement data can be eventually consistent.
 - Estimates show petabytes of new storage per day and tens of terabits per second of egress, which forces a blob store and a CDN.
 - Uploads are few per second, but encoding them needs tens of thousands of CPU cores, so encoding must be asynchronous and elastic.
+- Metadata and engagement data are small next to video bytes but still need sharded, write-optimized stores.
 </KeyTakeaways>

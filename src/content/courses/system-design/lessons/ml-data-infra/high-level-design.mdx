@@ -69,10 +69,46 @@ Because both are computed from the same definition, training and serving see con
 
 The dataset builder joins labels with historical feature values **as of each label's timestamp** and writes a versioned dataset referencing the exact table snapshots used. A catalog records lineage (which sources, code versions and parameters produced each dataset and model) and enforces access control.
 
+## Defining a feature once
+
+```yaml
+feature_group: card_activity
+entity: card_id
+source: stream://payments.transactions
+features:
+  - name: txn_count_1h
+    aggregation: count
+    window: 1h
+  - name: avg_amount_30d
+    aggregation: avg(amount_minor)
+    window: 30d
+    filter: "type != 'refund'"
+freshness:
+  online: 60s          # online value must be under a minute old
+  offline: 1h          # history written at least hourly
+owner: risk-ml-team
+```
+
+From this single definition, the platform generates the streaming job that updates the online store, the batch job that backfills and writes history to the offline store, and catalog entries for discovery and lineage.
+
+## Sizing the online store
+
+```text
+Entities: 1 billion users + 500 million cards + 100 million merchants
+Features per entity: ~200 values × ~8 bytes ≈ 1.6 KB
+Online store: ~1.6 billion entities × 1.6 KB ≈ 2.6 TB (replicated: ~8 TB)
+Reads: 500,000 lookups/s at peak, p99 under 10 ms → sharded in-memory or SSD-backed key-value store
+```
+
+<Ponder question="Why does the design capture database changes with change data capture instead of letting data scientists query the production databases directly?">
+Analytical queries scan large amounts of data and can overload the databases that serve users, causing outages. They also see only the current state, not the history of changes needed for point-in-time features. Change data capture streams every change into the lake without touching production query capacity, preserving history, and letting analytics scale independently.
+</Ponder>
+
 <KeyTakeaways>
 - Events and database changes flow through a stream; documents arrive via batch loaders.
 - A data lake on object storage with an open table format provides layered, snapshot-capable storage.
 - Batch and stream processing produce features and datasets, orchestrated with quality checks.
 - A feature store defines features once and materializes them into offline and online stores, preventing skew.
 - Versioned datasets built with point-in-time joins, plus lineage tracking, make training reproducible.
+- A single declarative feature definition generates both streaming and batch computations, plus lineage.
 </KeyTakeaways>

@@ -58,6 +58,10 @@ Two numbers drive the design: hundreds of terabytes of new storage every day and
 
 At 150,000 feed requests per second at peak and about 1,000 per server, the feed service needs about 150 servers plus headroom. Image processing at 3,500 uploads per second, if each upload takes about 200 ms of CPU to produce all variants, needs around 700 CPU cores busy at peak, provided by an autoscaled worker fleet.
 
+<Ponder question="Why keep the 3 MB originals at all, when users only ever see the 1 MB of variants?">
+Originals let the service regenerate variants later — for a new format such as AVIF, a new screen size or a better resizing algorithm — without the quality loss of re-encoding an already compressed variant. They also support features such as downloading your own photos in full quality. Because originals are read almost never after processing, they can sit in the cheapest archive tier, which makes keeping them affordable.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are uploading, following, a personalized feed, profiles, likes, comments and search.
 - Viewing must be fast and highly available; posts and counts can be eventually consistent.
