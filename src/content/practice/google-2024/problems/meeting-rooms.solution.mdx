@@ -1,0 +1,19 @@
+## Approach: sweep over sorted starts and ends
+
+The number of rooms needed is the largest number of meetings in progress at the same moment. That maximum is always reached at some meeting's start time. Checking every start against every meeting works, but it is `O(n²)`.
+
+Sort the start times and the end times **separately**, then sweep through the starts in order with a pointer into the ends:
+
+1. Before placing the meeting that starts at `s`, release every meeting whose end is `≤ s`. Its room is free again. Using `≤` lets a meeting that ends at `t` hand its room to one that starts at `t`.
+2. Take a room for the new meeting and record the running maximum.
+
+The pairing between starts and ends doesn't matter. At time `s`, the meetings in progress are "starts ≤ s" minus "ends ≤ s", and that's exactly what the two pointers count.
+
+## Alternative: a min-heap of end times
+
+Sort meetings by start and keep a min-heap of the end times of the meetings in rooms. For each meeting, if the earliest end is `≤` its start, reuse that room (pop). Then push the meeting's end. The heap's size at the end is the answer. The heap version extends naturally to the follow-up: store `(end, roomId)` pairs, plus a second heap of free room ids so the lowest-numbered room is reused first.
+
+## Complexity
+
+- **Time:** `O(n log n)` for sorting; the sweep is linear.
+- **Space:** `O(n)` for the two sorted arrays.

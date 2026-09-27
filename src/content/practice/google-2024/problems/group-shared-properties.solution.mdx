@@ -1,0 +1,20 @@
+## Approach: union-find keyed by property value
+
+Think of the records as nodes of a graph, with an edge between two records that share a property value. The groups are the graph's connected components.
+
+Building that graph by comparing every pair of records costs `O(n²)`, which times out for `5 * 10^4` records. You don't need every edge, though: all records with the same value for a property form one clique, and a chain through them connects the clique just as well.
+
+1. Start with each record in its own set of a **union-find** (disjoint set union) structure.
+2. For each property `p`, keep a hash map from value to the **first** record seen with that value. For each later record with the same value, union it with that first record.
+3. Scan the ids in increasing order and append each id to its root's group. This produces sorted groups, ordered by their smallest id, without any sorting.
+
+Path compression (here, path halving) keeps each `find` nearly constant time.
+
+## Complexity
+
+- **Time:** `O(n · α(n))`, effectively linear, plus hashing the `3n` values.
+- **Space:** `O(n)` for the parents, the value maps and the output.
+
+## About the follow-up
+
+Union-find already supports incremental arrivals. Keep a counter of components that starts at `0`, add `1` for each new record, and subtract `1` for every union that merges two different roots. Each arrival then costs near-constant time.

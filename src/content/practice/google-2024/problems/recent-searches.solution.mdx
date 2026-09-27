@@ -1,0 +1,28 @@
+## Approach: hash map plus a doubly linked list
+
+This is the same structure as an LRU cache. You need three operations to be fast:
+
+1. find whether a query is already in the history,
+2. move a query to the front, and
+3. drop the oldest query.
+
+A plain array does (1) and (2) in `O(capacity)`, because it has to search and shift. That's too slow with `10^5` entries and `2 · 10^5` calls. Instead:
+
+- keep the queries in a **doubly linked list**, most recent first, with sentinel head and tail nodes so there are no edge cases, and
+- keep a **hash map** from query to its list node.
+
+`search` looks the query up in the map. If it's there, unlink its node. Either way, insert the node right after the head. If the map is now larger than `capacity`, unlink the node before the tail and delete it from the map. Every step is `O(1)`.
+
+`getRecent(k)` walks from the head for at most `k` nodes.
+
+In Python, `collections.OrderedDict` already is this structure: `move_to_end` and `popitem(last=False)` are `O(1)`, and `reversed()` iterates from the newest entry without copying. In Java, `LinkedHashMap` plays the same role.
+
+## Complexity
+
+- `search`: `O(1)`.
+- `getRecent`: `O(k)`.
+- **Space:** `O(capacity)`.
+
+## About the follow-up
+
+Walking the list and filtering by prefix is `O(capacity)` in the worst case, when few queries match. For fast prefix lookups, index the stored queries in a trie. Each trie node keeps its queries in the order they were last searched, for example with a timestamp per query and an ordered set per node. Update those entries whenever a query moves or is evicted.

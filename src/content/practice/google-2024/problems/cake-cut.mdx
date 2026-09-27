@@ -1,0 +1,18 @@
+A rectangular cake is decorated with rectangular toppings that don't overlap. Topping `i` is given as `toppings[i] = [x1, x2, y1, y2]`: it covers `x1 <= x <= x2` and `y1 <= y <= y2`.
+
+You want to make **one straight vertical cut**, along a line `x = c`, such that:
+
+- the cut doesn't go **through** any topping. A topping is cut if `x1 < c < x2`; a cut that only runs along a topping's edge is fine.
+- **both** pieces of cake get at least one topping.
+
+Return `true` if such a cut exists, and `false` otherwise. The cake is large enough to contain all the toppings.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= toppings.length <= 10^5`
+- `0 <= x1 < x2 <= 10^9` and `0 <= y1 < y2 <= 10^9`
+- No two toppings overlap (they may touch along an edge).
+
+**Follow-up:** you may make either one vertical or one horizontal cut. What changes? And what if every piece must have the same number of toppings?

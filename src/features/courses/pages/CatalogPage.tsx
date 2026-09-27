@@ -1,8 +1,10 @@
+import { ProblemSetCard, useProblemSets } from '@/features/practice'
 import { useCourses } from '../courses-context'
 import { CourseCard } from '../components/CourseCard'
 
 export default function CatalogPage() {
   const courses = useCourses()
+  const problemSets = useProblemSets()
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
       <section className="mb-12 max-w-2xl">
@@ -22,6 +24,16 @@ export default function CatalogPage() {
           </div>
         ))}
       </div>
+      {problemSets.length > 0 && (
+        <>
+          <h2 className="mt-12 mb-4 text-xl font-semibold">Interview practice</h2>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {problemSets.map((set) => (
+              <ProblemSetCard key={set.id} problemSet={set} />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

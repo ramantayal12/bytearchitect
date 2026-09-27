@@ -1,0 +1,26 @@
+## Two easy extremes
+
+- **Array, sum on query.** `addDocument` is `O(1)`, but `getTotalCount` adds up to `10^5` numbers. With `10^5` queries, that's `10^{10}` steps.
+- **Prefix sums, rebuilt on update.** `getTotalCount` is `O(1)`, but every `addDocument` has to update up to `10^5` prefix sums.
+
+Both extremes are fine for a small number of calls. Here, updates and queries are **interleaved**, so you need both to be fast.
+
+## Approach: Fenwick tree (binary indexed tree)
+
+A Fenwick tree stores partial sums over blocks whose sizes are powers of two, and answers "sum of the first `i` values" and "change value `j`" in `O(log n)` each.
+
+- Keep `counts[docId]`, the current count of each document. On `addDocument`, add the **difference** `wordCount - counts[docId]` to the tree. Replacing a count is just an update by that difference.
+- `getTotalCount(numDocs)` is the prefix sum of the first `numDocs` entries.
+
+Both loops follow the lowest set bit (`i & -i`): updates walk up to the blocks that contain `docId`, and queries walk down through disjoint blocks that cover `[0, numDocs)`.
+
+A segment tree works equally well. Fenwick is shorter to write in an interview.
+
+## Complexity
+
+- **Time:** `O(log n)` per call, with `n = 10^5`.
+- **Space:** `O(n)`.
+
+## About the follow-up
+
+Shard documents by id range, so each machine owns a contiguous range of ids and keeps its own tree (or just a running total). A query for `numDocs` needs the full totals of every shard entirely below `numDocs`, which a coordinator can cache, plus one prefix query on the shard that contains `numDocs - 1`.

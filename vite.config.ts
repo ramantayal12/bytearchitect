@@ -46,6 +46,10 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 400,
   },
+  // The code runner worker lazy-loads the TypeScript transpiler, which needs ES module workers.
+  worker: {
+    format: 'es',
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

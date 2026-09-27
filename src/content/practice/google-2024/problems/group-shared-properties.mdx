@@ -1,0 +1,17 @@
+You are given a list of records. Record `i` has an id `i` and three properties, `records[i] = [p1, p2, p3]`.
+
+Two records belong to the **same group** if they have the same value for at least one property: the same `p1`, the same `p2` or the same `p3`. Grouping is transitive: if record `a` shares a property with `b`, and `b` shares a (possibly different) property with `c`, then `a`, `b` and `c` are all in one group, even if `a` and `c` share nothing.
+
+Values only match within the same property. A `p1` equal to another record's `p2` does not connect them.
+
+Return the groups. List the ids inside each group in increasing order, and order the groups by their smallest id.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= records.length <= 5 * 10^4`
+- `records[i].length == 3`
+- `1 <= records[i][j].length <= 10`, lowercase letters and digits
+
+**Follow-up:** records arrive one at a time and you must report the number of groups after each arrival. What changes?

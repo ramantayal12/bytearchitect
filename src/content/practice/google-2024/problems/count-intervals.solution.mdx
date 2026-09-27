@@ -1,0 +1,26 @@
+## Two traps
+
+- **A set of covered integers** is simple, but one `add(1, 10^9)` would insert a billion integers.
+- **Store the intervals and merge them on every `count`** costs `O(n log n)` per call. With `10^4` intervals and `10^4` counts, that's too slow.
+
+## Approach: keep the intervals merged, and a running total
+
+Maintain the covered set as **disjoint intervals sorted by start**, plus `total`, the number of integers they cover. Then `count()` is `O(1)`, and all the work happens in `add(left, right)`:
+
+1. Binary search for the first stored interval that ends at or after `left - 1`. Intervals before it lie entirely to the left of the new one, with a gap of at least one integer.
+2. Walk forward over every stored interval that starts at or before `right + 1`. Each one overlaps or touches `[left, right]`: widen `left`/`right` to cover it, subtract its size from `total`, and mark it for removal.
+3. Replace the absorbed run with the single merged interval, and add its size to `total`.
+
+Merging touching intervals such as `[1,3]` and `[4,5]` isn't required for correctness, but it keeps the list shorter.
+
+## Complexity
+
+Each interval is inserted once and absorbed at most once, so the merging is amortized `O(1)` per interval. The binary search is `O(log n)`. The array splice shifts up to `n` elements, which is fast for `3 · 10^4` calls. In languages with a balanced tree map (`TreeMap` in Java, `std::map` in C++, `SortedList` in Python's `sortedcontainers`), the whole `add` is amortized `O(log n)`.
+
+- `add`: amortized `O(log n)` plus the shift.
+- `count`: `O(1)`.
+- **Space:** `O(n)`.
+
+## About the follow-up
+
+`remove` can split one stored interval into two, so the "absorb at most once" argument breaks, but each call still does `O(log n)` plus the intervals it deletes. Alternatively, a **dynamic segment tree** over `[1, 10^9]` stores, per node, whether the range is fully covered and how many integers below it are covered. It supports both range assignments in `O(log C)` and creates nodes lazily.

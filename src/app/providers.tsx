@@ -7,12 +7,15 @@ import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AuthProvider, type AuthService } from '@/features/auth'
 import { CoursesProvider, type Course } from '@/features/courses'
+import { PracticeProvider, type ProblemSet, type SubmissionRepository } from '@/features/practice'
 import { ProgressProvider, type ProgressRepository } from '@/features/progress'
 
 export interface AppServices {
   auth: AuthService
   progress: ProgressRepository
   courses: readonly Course[]
+  problemSets: readonly ProblemSet[]
+  submissions: SubmissionRepository
 }
 
 /** Composition root: all backend adapters are injected here. */
@@ -33,12 +36,17 @@ export function AppProviders({
         <AuthProvider service={services.auth}>
           <ProgressProvider repository={services.progress}>
             <CoursesProvider courses={services.courses}>
-              <MDXProvider components={mdxComponents}>
-                <TooltipProvider>
-                  {children}
-                  <Toaster richColors position="bottom-right" />
-                </TooltipProvider>
-              </MDXProvider>
+              <PracticeProvider
+                problemSets={services.problemSets}
+                submissions={services.submissions}
+              >
+                <MDXProvider components={mdxComponents}>
+                  <TooltipProvider>
+                    {children}
+                    <Toaster richColors position="bottom-right" />
+                  </TooltipProvider>
+                </MDXProvider>
+              </PracticeProvider>
             </CoursesProvider>
           </ProgressProvider>
         </AuthProvider>

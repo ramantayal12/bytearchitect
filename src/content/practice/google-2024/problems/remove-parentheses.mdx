@@ -1,0 +1,18 @@
+You are given a valid arithmetic `formula` made of single-letter variables (`a`–`z`), `+`, `-`, `(` and `)`, with no spaces.
+
+Return an equivalent formula **without any parentheses**. Keep the variables in their original order and write each one with its resulting sign:
+
+- The first variable has no sign if it is positive, and a `-` if it is negative.
+- Every later variable is preceded by `+` or `-`.
+
+A `+` or `-` can be **unary** at the very start of the formula or right after `(`, as in `-(a+b)` or `a-(-b+c)`. Everywhere else, operators sit between two terms.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= formula.length <= 1.5 * 10^5`
+- `formula` is a valid formula as described above.
+- Parentheses are nested at most `100` deep.
+
+**Follow-up:** the variables may now be multi-letter names such as `speed` or `x2`, and `*` may appear between a term and a parenthesis, as in `2*(a-b)`. How would you extend your solution?

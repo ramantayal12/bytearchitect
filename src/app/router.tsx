@@ -4,6 +4,7 @@ import { AppShell } from '@/components/layout/AppShell'
 import { RouteError } from '@/components/layout/RouteError'
 import { authRoutes, RedirectIfSignedIn, RequireVerifiedUser } from '@/features/auth'
 import { courseRoutes } from '@/features/courses'
+import { practiceRoutes } from '@/features/practice'
 
 type PageModule = { default: ComponentType }
 
@@ -29,6 +30,9 @@ export const routes: RouteObject[] = [
       { index: true, ...page(courseRoutes.Catalog) },
       { path: 'courses/:courseId', ...page(courseRoutes.CourseOverview) },
       { path: 'courses/:courseId/:chapterId/:lessonSlug', ...page(courseRoutes.Lesson, verified) },
+      { path: 'practice', ...page(practiceRoutes.ProblemSets) },
+      { path: 'practice/:setId', ...page(practiceRoutes.ProblemSet) },
+      { path: 'practice/:setId/:slug', ...page(practiceRoutes.Problem, verified) },
       { path: 'login', ...page(authRoutes.Login, guest) },
       { path: 'signup', ...page(authRoutes.Signup, guest) },
       { path: 'forgot-password', ...page(authRoutes.ForgotPassword, guest) },

@@ -1,0 +1,14 @@
+A message must travel across an `m x n` grid, from the top-left cell `[0, 0]` to the bottom-right cell `[m - 1, n - 1]`. It can only hop between horizontally or vertically adjacent cells that **both have a relay tower**, and it needs towers on the start and destination cells too.
+
+No towers exist yet. `buildDay[r][c]` is the day on which the tower on cell `[r, c]` will be built. Once built, a tower stays forever. (In the interview, this information came from calling an API, `getTower`, per cell.)
+
+Return the earliest day on which the message can be transmitted.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= m, n <= 300`
+- `0 <= buildDay[r][c] <= 10^9`
+
+**Follow-up:** each call to the `getTower` API is expensive. How would you reduce the number of calls?

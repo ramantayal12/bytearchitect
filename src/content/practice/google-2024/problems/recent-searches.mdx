@@ -1,0 +1,18 @@
+Design the "recent searches" list of a search box. It remembers a limited number of distinct queries and shows the most recent ones first.
+
+Implement the `RecentSearches` class:
+
+- `RecentSearches(int capacity)` creates an empty history that holds at most `capacity` distinct queries.
+- `void search(String query)` records a search. If `query` is already in the history, it moves to the front instead of appearing twice. If the history then holds more than `capacity` queries, the **least recently** searched one is dropped.
+- `String[] getRecent(int k)` returns up to `k` queries from the history, most recent first.
+
+<Examples />
+
+**Constraints:**
+
+- `1 <= capacity <= 10^5`
+- `1 <= query.length <= 20`, lowercase letters and digits
+- `1 <= k <= 100`
+- At most `2 * 10^5` calls in total.
+
+**Follow-up:** show only recent searches that start with what the user has typed so far (a prefix), still most recent first.

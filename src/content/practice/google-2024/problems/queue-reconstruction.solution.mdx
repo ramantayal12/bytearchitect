@@ -1,0 +1,19 @@
+## Approach: place the tallest people first
+
+The key observation: a person's `k` only counts people who are **at least as tall** as them. Shorter people are invisible to them.
+
+So place people from tallest to shortest. When it's someone's turn, everyone already in the queue is at least as tall, so inserting them at index `k` puts exactly `k` of those people in front. Everyone inserted afterwards is shorter (or equally tall, but sorted after, see below), so they never change this person's count, wherever they go.
+
+Among people of **equal** height, insert the one with the smaller `k` first. The one with the larger `k` must end up behind it, and inserting it later at its larger index does exactly that.
+
+1. Sort by height descending, then by `k` ascending.
+2. Insert each person at index `k` of the result.
+
+## Complexity
+
+- **Time:** `O(n²)` in the worst case, because each insertion shifts up to `n` elements. For `n <= 2000` that's about two million moves, which is fast.
+- **Space:** `O(n)` for the result.
+
+## About the follow-up
+
+Reverse the idea: place people from **shortest** to tallest into an array of `n` empty slots. A person with key `[h, k]` goes into the `(k + 1)`-th empty slot, counting from the front. Slots left empty will later hold taller people, which the person must count. Ties need care: with equal heights, process the larger `k` first. A Fenwick tree (binary indexed tree) over the slots finds the `(k + 1)`-th empty slot in `O(log n)`, for `O(n log n)` overall.

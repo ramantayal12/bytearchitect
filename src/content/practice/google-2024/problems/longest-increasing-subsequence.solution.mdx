@@ -1,0 +1,26 @@
+## Warm-up: `O(n²)` dynamic programming
+
+Let `best[i]` be the length of the longest increasing subsequence ending at index `i`. Then `best[i] = 1 + max(best[j])` over all `j < i` with `nums[j] < nums[i]`. The answer is `max(best)`. That's correct, but `10^10` steps for `n = 10^5`.
+
+## Approach: patience sorting with binary search
+
+Keep an array `tails`, where `tails[k]` is the **smallest possible last value** of an increasing subsequence of length `k + 1` seen so far. A smaller tail is always better, because it leaves more room for future elements.
+
+`tails` is strictly increasing. (A subsequence of length `k + 2` contains one of length `k + 1` that ends lower.) For each `x`:
+
+- If `x` is greater than every tail, it extends the longest subsequence: append it.
+- Otherwise find the **first tail `>= x`** with binary search and replace it with `x`. That subsequence length can now end at a smaller value.
+
+The length of `tails` is the answer. `tails` itself is generally **not** a valid subsequence. Only its length is meaningful.
+
+Using "first tail `>= x`" (a lower bound) rather than `> x` is what makes the subsequence **strictly** increasing: an equal value replaces, never extends.
+
+## Complexity
+
+- **Time:** `O(n log n)`.
+- **Space:** `O(n)` for `tails`.
+
+## About the follow-ups
+
+1. **Reconstruct:** alongside `tails`, store the **index** of each tail. For every element, record its predecessor: the index of the tail one position to its left when it was placed. Walk the predecessors back from the last tail.
+2. **Count:** extend the `O(n²)` DP with `count[i]`, the number of longest subsequences ending at `i`. When `best[j] + 1` beats `best[i]`, copy `count[j]`; when it ties, add it. A Fenwick tree over compressed values, storing `(length, count)` pairs, brings this down to `O(n log n)`.

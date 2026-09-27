@@ -1,0 +1,27 @@
+## What is being minimized?
+
+A route is usable once **all** of its towers exist, that is, on the maximum `buildDay` along it. The answer is the smallest such maximum over all routes: a *minimax* (bottleneck) path problem.
+
+Trying every distinct day and running a BFS each time is correct, but with up to `90,000` distinct days it's `O((mn)²)`.
+
+## Approach 1: binary search on the day
+
+Feasibility is **monotonic**: if the message can cross on day `d`, it can cross on any later day, because towers are never removed. So binary search over the sorted distinct days. For each candidate day `d`, run a BFS (or DFS) that only steps on cells with `buildDay <= d`, and check whether it reaches the destination. (This is the JavaScript solution.)
+
+- **Time:** `O(mn log(mn))`, with `log(mn)` BFS passes.
+- **Space:** `O(mn)`.
+
+## Approach 2: Dijkstra for bottleneck paths
+
+Dijkstra's algorithm works with any path cost that never decreases along a path, including "maximum so far". Let `ready[cell]` be the earliest day on which some route to that cell is complete. Pop cells from a min-heap in order of `ready`, and relax neighbours with `max(ready[cell], buildDay[neighbor])`. The first time the destination is popped, its value is the answer. (This is the Python solution.)
+
+- **Time:** `O(mn log(mn))`.
+- **Space:** `O(mn)`.
+
+## Approach 3: union-find in build order
+
+Process cells in increasing `buildDay` order. "Build" each tower and union it with its already-built neighbours. The answer is the day at which the start and the destination first share a set. This also runs in `O(mn log(mn))`, dominated by sorting.
+
+## About the follow-up
+
+Dijkstra only looks at cells whose neighbours it pops, so query `getTower` lazily and cache the answers. Cells far beyond the answer's bottleneck are never queried. With binary search, cache results across iterations, since each BFS revisits the same cells.
