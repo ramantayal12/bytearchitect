@@ -51,10 +51,26 @@ stateDiagram-v2
 In a food-delivery variant, spend your deep dive on dispatch timing and batching: predicting preparation time and deciding when and to whom to assign orders. These are the parts that do not exist in ride-hailing.
 </Callout>
 
+## Rough numbers
+
+| Assumption | Value | Consequence |
+| --- | --- | --- |
+| Orders per day | 10 million | ~115/s average, dinner peaks of ~600/s |
+| Active couriers at peak | 500,000 | ~125,000 location updates per second (every 4 s) |
+| Restaurants | 1 million | Menus ~50 KB each → ~50 GB; easily cached |
+| Menu page views | 30 per order | ~300 million per day, mostly cache hits |
+
+As with ride-hailing, location updates and read-heavy browsing dominate load, while orders themselves are modest in volume but require strong consistency and payment correctness.
+
+<Ponder question="A restaurant's predicted preparation time is 15 minutes, but tonight its kitchen is overwhelmed and orders take 35 minutes. How should the system notice and adapt?">
+Compare predicted and actual "ready" times as orders complete and weight recent observations heavily, so the restaurant's prediction rises within a few orders. Signals such as the number of open orders at that restaurant and slow confirmations help predict it earlier. The dispatcher then delays courier assignment accordingly, the estimated delivery time shown to new customers increases, and the restaurant can be ranked lower or temporarily paused to protect the experience.
+</Ponder>
+
 <KeyTakeaways>
 - Food delivery adds a third party, the restaurant, and a catalog of menus that must be searchable and cached.
 - Restaurant discovery reuses the proximity service with delivery zones.
 - The order is a three-party state machine, with payment authorized at order time and captured on delivery.
 - Dispatch is timed using predicted preparation time so couriers arrive when the food is ready.
 - Batching several orders per courier turns assignment into a constrained routing optimization.
+- Order volume is modest; courier locations and menu browsing dominate load.
 </KeyTakeaways>

@@ -82,9 +82,42 @@ The shard count trades write capacity against read and storage cost. If one shar
 
 The counter store should support **atomic increments** at high throughput: an in-memory store with persistence, or a wide-column database with native counter types. Shard keys like `post:98765:likes#7` spread naturally across partitions via hashing.
 
+## Data model
+
+| Table | Key | Fields |
+| --- | --- | --- |
+| counter_metadata | counter_id | shard_count, created_at, last_rate, type (total or distinct) |
+| counter_shards | (counter_id, shard_index) | value (atomically incremented) |
+| counter_totals (cache) | counter_id | total, computed_at |
+
+```mermaid
+sequenceDiagram
+  participant U as User taps like
+  participant API as Counter API
+  participant MD as Metadata cache
+  participant S as Shard store
+  participant AG as Aggregator
+  participant C as Totals cache
+  U->>API: increment(post:98765:likes)
+  API->>MD: shard count?
+  MD-->>API: 16
+  API->>S: INCR post:98765:likes shard 11
+  S-->>API: ok
+  Note over AG: every 2 s for active counters
+  AG->>S: read shards 0–15
+  AG->>C: total = 1,203,412
+```
+
+The aggregator only needs to visit **active** counters — those incremented recently — which it learns from a stream of "counter touched" events. Billions of cold counters are never aggregated until they change.
+
+<Ponder question="Why pick a shard at random for each increment rather than hashing the user ID to a shard?">
+Random choice spreads load evenly regardless of who is liking. Hashing by user would work too, and it has one advantage — a user's like and unlike land on the same shard — but it can create uneven load if a few heavy users dominate, and it adds nothing for correctness because the total is a sum over all shards anyway. Either is acceptable; random is the simpler default.
+</Ponder>
+
 <KeyTakeaways>
 - The counter service exposes create, increment and getCount, hiding sharding from callers.
 - Writes increment one randomly chosen shard; reads return a periodically aggregated, cached total.
 - Counters start with one shard and scale up when they become hot.
 - The store must support fast atomic increments; hashed shard keys spread load across nodes.
+- The aggregator visits only recently active counters, so billions of cold counters cost nothing to maintain.
 </KeyTakeaways>

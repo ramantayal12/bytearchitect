@@ -65,6 +65,23 @@ Users judge speed by what they see. Techniques such as optimistic UI updates, st
 When asked how to make something faster, start with where the time goes, then address the network (distance and round trips), then caching, then the data layer. It shows structured thinking.
 </Callout>
 
+## A latency makeover, by example
+
+A product page takes 1,200 ms. Tracing shows three sequential backend calls of 150 ms each, a 300 ms database query without an index, 200 ms of image loading from a distant origin and 250 ms of other work.
+
+| Change | Saving |
+| --- | --- |
+| Run the three independent calls in parallel | ~300 ms |
+| Add an index for the slow query and cache its result | ~280 ms |
+| Serve images through a CDN | ~150 ms |
+| **New total** | **~470 ms** |
+
+None of the changes required faster servers — only fewer sequential round trips, better data access and less distance.
+
+<Ponder question="A service's p50 latency is 20 ms, but its p99 is 900 ms. Where would you look first?">
+The tail usually comes from something intermittent: garbage-collection pauses, a slow replica or disk, lock contention, cache misses on cold keys, retries after timeouts, or requests that fan out to many backends and wait for the slowest. Compare traces of slow and fast requests to see which step differs, and consider hedged requests, timeouts and eliminating the intermittent cause.
+</Ponder>
+
 <KeyTakeaways>
 - Measure with tracing and percentiles; tail latency dominates in fan-out systems.
 - Network distance and round trips usually cost more than computation; serve from the edge and reuse connections.

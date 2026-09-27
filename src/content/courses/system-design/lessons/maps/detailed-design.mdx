@@ -82,10 +82,30 @@ The model is trained on millions of completed trips, comparing predicted with ac
 - **Sparse edges** with too few recent pings fall back to historical speeds for that time slot.
 - **Privacy** is protected by discarding identifiers after matching and by requiring a minimum number of distinct devices before publishing an edge speed.
 
+## Why the overlay graph is so much smaller
+
+Suppose a continent's graph has 100 million nodes split into 10,000 cells of about 10,000 nodes each, with an average of 50 boundary nodes per cell.
+
+```text
+Overlay nodes:      10,000 cells × 50 boundary nodes          = 500,000
+Shortcuts per cell: 50 × 50                                   = 2,500
+Overlay edges:      10,000 × 2,500 + cross-cell road edges    ≈ 25 million
+Query work:         local search in 2 cells (~20,000 nodes) + overlay search
+                    (a small fraction of 500,000 nodes)       → milliseconds
+Customization:      10,000 cells, each a small local computation → seconds on many cores
+```
+
+Multi-level partitions shrink the top-level overlay further, so long-distance queries touch only a few thousand overlay nodes.
+
+<Ponder question="A bridge closes suddenly. How quickly can routes avoid it in this design, and what has to be recomputed?">
+The closure sets the bridge's edges to an infinite (or very large) weight. Only the cells containing those edges need their shortcut weights recomputed — milliseconds of work — and the new weight version is published to routing servers within the next update cycle, typically a minute or less. No repartitioning is needed because the graph's shape is unchanged; only its weights changed.
+</Ponder>
+
 <KeyTakeaways>
 - Partitioning the graph into cells with precomputed shortcuts between boundary nodes makes queries explore thousands, not millions, of nodes.
 - Because the partition depends only on topology, live traffic is absorbed by quickly recomputing shortcut weights.
 - Routing servers share a small overlay graph and hold detailed cells for their regions, with atomic weight updates.
 - A machine-learned model corrects graph travel times for accurate ETAs, refreshed during navigation.
 - Hidden Markov map matching, robust windowed aggregation and historical fallbacks turn noisy pings into reliable speeds.
+- An overlay of a few hundred thousand boundary nodes replaces a graph of a hundred million for most of a long query.
 </KeyTakeaways>

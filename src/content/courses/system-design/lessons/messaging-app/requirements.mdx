@@ -53,10 +53,27 @@ Out of scope: voice and video calls, payments, status stories and message search
 The defining numbers are hundreds of millions of concurrent connections and millions of messages per second. Connection management and efficient routing between gateways are the core of the design.
 </Callout>
 
+## What 500 million connections cost
+
+Each open connection consumes memory for socket buffers, TLS state and the gateway's session record — on the order of 10–50 KB with careful tuning.
+
+```text
+100,000 connections × 30 KB ≈ 3 GB of memory per gateway   (comfortable)
+500 million connections × 30 KB ≈ 15 TB of memory across the fleet
+Heartbeats: 500M devices every 60 s ≈ 8 million tiny messages per second
+```
+
+Heartbeats alone exceed the message rate, which is why their interval is tuned carefully (see the high-level design) and why gateways are built on event-driven I/O rather than a thread per connection.
+
+<Ponder question="The service deletes messages from its inboxes once they are delivered. What product feature becomes harder because of this choice?">
+Adding a new device or reinstalling the app on a new phone: the server no longer has the history to send. The new device must receive history from one of the user's existing devices (device-to-device transfer) or from an encrypted backup the user controls. The choice trades convenience for privacy and much lower server storage.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are one-to-one and group chat, media, offline delivery, receipts, presence, multi-device and end-to-end encryption.
 - Users must see each message exactly once, in order, with no loss after acknowledgement.
 - Estimates: about 100 billion messages per day, millions per second at peak and 500 million concurrent connections.
 - Thousands of gateway servers are needed just to hold connections.
 - Undelivered-message storage is small but must be durable; media dominates bandwidth and storage.
+- Holding hundreds of millions of connections costs terabytes of memory and millions of heartbeats per second across the fleet.
 </KeyTakeaways>

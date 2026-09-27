@@ -12,7 +12,7 @@ Separating building blocks from design problems has three benefits:
 
 1. **Reuse.** The same block appears in many designs; you learn it once.
 2. **Depth on demand.** You can zoom into a block's internals when the interviewer asks.
-3. **Clear communication.** “A pub-sub system with at-least-once delivery” conveys a lot in a few words.
+3. **Clear communication.** "A pub-sub system with at-least-once delivery" conveys a lot in a few words.
 
 ## The building blocks in this course
 
@@ -62,17 +62,81 @@ flowchart TB
 | **Task scheduler** | Runs jobs reliably at scale, on schedule or on demand |
 | **Sharded counters** | Counts extremely hot values such as likes at high write rates |
 
+## How the blocks fit together
+
+Follow a single user action — uploading a photo to a social app — and count the blocks involved:
+
+<Slides title="One upload, many building blocks">
+<Slide caption="1. The app resolves the API's name with DNS, and a load balancer picks a healthy server. A rate limiter rejects abusive clients.">
+
+```mermaid
+flowchart LR
+  App[Mobile app] --> DNS[DNS] --> LB[Load balancer] --> RL[Rate limiter] --> API[Upload service]
+```
+
+</Slide>
+<Slide caption="2. The service gets a unique ID from the sequencer, stores the image in the blob store and its metadata in a database.">
+
+```mermaid
+flowchart LR
+  API[Upload service] --> SEQ[Sequencer]
+  API --> BLOB[(Blob store)]
+  API --> DB[(Metadata database)]
+```
+
+</Slide>
+<Slide caption="3. It publishes an 'uploaded' event. Subscribers resize the image, update followers' feeds and index the caption for search.">
+
+```mermaid
+flowchart LR
+  API[Upload service] --> PS[[Pub-sub]]
+  PS --> T[Thumbnail workers]
+  PS --> F[Feed service]
+  PS --> S[Search indexer]
+```
+
+</Slide>
+<Slide caption="4. Viewers load the photo through a CDN and its like count from sharded counters; everything is observed through monitoring and logging.">
+
+```mermaid
+flowchart LR
+  V[Viewers] --> CDN[CDN] --> BLOB[(Blob store)]
+  V --> C[(Cache)] --> CNT[Sharded counters]
+  MON[Monitoring and logging] -.-> CDN & C & CNT
+```
+
+</Slide>
+</Slides>
+
+Almost every block in the course appeared in one feature. This is why investing in the blocks pays off: a new design problem is mostly a question of which blocks to use, how to connect them, and what is genuinely unique about the problem.
+
+## Which designs use which blocks
+
+| Design problem | Blocks at its core |
+| --- | --- |
+| Video platform | Blob store, CDN, task scheduler (transcoding), database, cache |
+| Messaging app | Load balancers, key-value store, messaging queue, sequencer |
+| News feed | Cache, pub-sub, database, sharded counters |
+| Ride-hailing | Key-value store, pub-sub, database, distributed cache |
+| URL shortener | Sequencer, key-value store, cache, rate limiter |
+| Web crawler | Messaging queue, blob store, task scheduler, distributed search |
+
 ## How each chapter is structured
 
 Each building-block chapter treats the block as a design problem in its own right. We define its requirements, sketch a high-level design, go deep on the tricky parts and evaluate the design against its requirements. This mirrors the SCALED framework and gives you extra practice with it.
 
+<Ponder question="Why does the upload flow publish an event instead of calling the thumbnail, feed and search services directly?">
+Publishing decouples the upload from its side effects. The upload returns as soon as the photo is stored, instead of waiting for three slower services; a failure in one subscriber (say, search indexing) does not fail the upload; each subscriber can scale and retry independently; and new consumers, such as a moderation service, can be added later without touching the upload code.
+</Ponder>
+
 <Callout type="tip">
-While reading each chapter, note the one or two sentences you would use to justify the block in a larger design, such as: “We put a queue between upload and transcoding so that slow transcoding never blocks users, and so that bursts of uploads are absorbed.”
+While reading each chapter, note the one or two sentences you would use to justify the block in a larger design, such as: "We put a queue between upload and transcoding so that slow transcoding never blocks users, and so that bursts of uploads are absorbed."
 </Callout>
 
 <KeyTakeaways>
 - Building blocks are reusable components that appear in nearly every large system.
 - Studying them separately lets you use them quickly in designs and zoom in when asked.
 - This course covers sixteen blocks spanning traffic, data, asynchronous processing and support services.
+- A single feature, such as a photo upload, typically touches most of the blocks.
 - Each chapter designs its block from requirements to evaluation, reinforcing the SCALED framework.
 </KeyTakeaways>

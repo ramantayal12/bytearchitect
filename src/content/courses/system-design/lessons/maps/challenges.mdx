@@ -50,6 +50,10 @@ Roads open and close, and businesses move. Updating the canonical map, regenerat
 Naming the challenges before diving in structures your deep dive. Interviewers often care most about challenges 1 to 3, because they combine algorithms with distributed systems.
 </Callout>
 
+<Ponder question="A* uses straight-line distance to the destination as its heuristic. Why does it help less on road networks than on a grid?">
+Fast routes often go *away* from the destination first — to reach a highway — and travel time is not proportional to straight-line distance, since highways are several times faster than side streets. A heuristic based on distance divided by the maximum speed must be very conservative to remain admissible, so it guides the search only weakly. Preprocessing-based techniques exploit the road network's structure far more effectively.
+</Ponder>
+
 <KeyTakeaways>
 - Dijkstra and A* explore too much of a continent-scale graph for interactive, high-throughput routing.
 - Splitting the graph across machines requires handling routes that cross partition boundaries.

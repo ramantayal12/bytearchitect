@@ -94,10 +94,43 @@ Business summaries needed for ranking are cached by business ID. Popular areas s
 
 The service is deployed in several regions, and users are routed to the nearest one. Each region holds the full index, which is small, and read replicas of the business database. Writes go to the primary region. Regional deployment also helps with data residency rules, since a region might only need to store businesses in its own jurisdiction.
 
+## Ranking nearby results
+
+Distance alone makes poor rankings — the closest café may be closed or poorly rated. A simple, explainable scoring function combines several signals:
+
+```text
+score = w1 × (1 − distance / radius)
+      + w2 × (rating / 5) × confidence(review_count)
+      + w3 × open_now
+      + w4 × personal_affinity(user, category)
+```
+
+Weights are tuned with experiments on click-through and visits. Because ranking runs only on the few hundred candidates from the cells, it can afford richer features than the spatial lookup itself.
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant L as Location-based service
+  participant I as In-memory index
+  participant K as Summary cache
+  C->>L: nearby(lat, lng, 1 km, cafe, openNow)
+  L->>I: cells covering the circle
+  I-->>L: 640 candidate business IDs
+  L->>K: multiGet summaries (coords, rating, hours)
+  K-->>L: summaries
+  L->>L: exact distance, filters, score, top 20
+  L-->>C: 20 results + cursor
+```
+
+<Ponder question="Why does the location-based service store only IDs in its spatial index and fetch summaries from a cache, instead of keeping full business records in the index?">
+Keeping only IDs and coordinates keeps the index tiny (a few gigabytes), so every server can hold all of it and snapshots are quick to build and ship. Fields that change more often — ratings, hours, review counts — live in a cache fed by the business service, so they can be updated without rebuilding the index. The cost is an extra batched cache lookup per search, which is cheap.
+</Ponder>
+
 <KeyTakeaways>
 - The location-based service answers nearby searches from a complete, read-only in-memory index and scales by adding replicas.
 - The business service owns business data, writes to a sharded primary and emits change events.
 - An index builder turns change events into periodic snapshots that servers swap in atomically.
 - Search works in four steps: find overlapping cells, look up IDs, fetch cached summaries, then filter and rank.
 - Multi-region deployment keeps latency low and replicates the small index everywhere.
+- Ranking blends distance, rating confidence, opening hours and personal affinity over the candidates from the cells.
 </KeyTakeaways>

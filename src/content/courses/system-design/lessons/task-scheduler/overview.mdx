@@ -55,10 +55,47 @@ flowchart LR
 Because tasks can run more than once (for example, if a worker dies after finishing but before reporting success), task code should be **idempotent** — the same requirement we saw with messaging queues.
 </Callout>
 
+## Where schedulers show up
+
+| Product feature | Task type | What matters most |
+| --- | --- | --- |
+| "Remind me tomorrow at 9 a.m." | Delayed | Runs close to the chosen time, exactly once from the user's view |
+| Nightly billing run | Recurring | Never skipped; a missed run must be caught up |
+| Video transcoding after upload | Immediate, heavy | Throughput and resource placement (CPU or GPU) |
+| Retry a failed webhook in 5 minutes | Delayed | Backoff and a retry limit |
+| Delete expired sessions every 10 minutes | Recurring | Cheap; skipping a run occasionally is fine |
+| Train a machine-learning model | Long-running batch | Checkpointing and preemption |
+
+### One delayed task, end to end
+
+```mermaid
+sequenceDiagram
+  participant App as Reminder service
+  participant API as Scheduler API
+  participant DB as Task store
+  participant S as Scheduler worker
+  participant E as Executor
+  App->>API: submitTask(sendReminder, user 42, runAt tomorrow 09:00, key r-42-0927)
+  API->>DB: insert task (state SCHEDULED)
+  API-->>App: taskId 9001
+  Note over S: next day, 09:00:00
+  S->>DB: find due tasks, mark 9001 QUEUED
+  S->>E: dispatch via queue
+  E->>E: send the reminder email
+  E->>DB: mark SUCCEEDED
+```
+
+The reminder service is done after one API call; durability, timing, retries and execution are the scheduler's job.
+
+<Ponder question="Why should a nightly billing job and a session-cleanup job declare different policies for missed runs?">
+If the scheduler was down at 02:00, skipping the billing run would mean customers are never billed for that day — it must run as soon as possible (catch up). Session cleanup is idempotent and the next run removes everything anyway, so running a missed occurrence adds load for no benefit — it should skip. Only the task's owner knows which is right, so the policy belongs in the task specification.
+</Ponder>
+
 <KeyTakeaways>
 - A task scheduler runs deferred, periodic and background work reliably across a fleet.
 - Tasks carry code, inputs, timing, resource needs and policies.
 - Single-server cron is a single point of failure with no scalability, retries or visibility.
 - Requirements emphasize at-least-once execution, scale, availability, timeliness and fairness.
 - Task code should be idempotent because retries can cause duplicate execution.
+- Each task declares its own policies, such as whether missed recurring runs are caught up or skipped.
 </KeyTakeaways>

@@ -69,6 +69,26 @@ Task metadata ~1 KB × 100M/day ≈ 100 GB/day of state (retained for 30 days �
 
 The **top-of-the-hour spike** is a classic scheduler problem: thousands of recurring tasks scheduled for `00:00` fire simultaneously. Designs mitigate it by adding **jitter** to recurring schedules where exact timing does not matter, and by queuing tasks by priority.
 
+## Sizing the moving parts
+
+```text
+Task store writes:  each task changes state ~4 times (scheduled, queued, running, done)
+                    1,000 starts/s × 4 ≈ 4,000 writes/s average, 40,000+ at hourly peaks
+Partitions:         at ~2,000 writes/s per partition leader → 20–32 partitions with headroom
+Queue throughput:   1,000–50,000 enqueues/s → a partitioned queue, sharded by priority
+Scheduler workers:  each polls a few partitions every second → a handful of workers suffice
+```
+
+The executors dominate cost (thousands of machines); the control plane — API, store and scheduler workers — is comparatively small, but it must be highly available because every task depends on it.
+
+## Non-goals
+
+To keep the design focused, we do not build a general workflow language, a data-processing engine or a container orchestrator. The scheduler decides *when* and *where* tasks run and tracks their state; it delegates actual execution environments to an existing cluster manager and leaves multi-step workflows to a layer built on top (discussed in the considerations lesson).
+
+<Ponder question="A client calls submitTask, the request times out, and the client retries. Without an idempotency key, what could go wrong for a 'charge subscription' task?">
+The first request may have been stored even though the response was lost, so the retry creates a second task and the customer could be charged twice. With an idempotency key such as `charge-sub-881-2026-09`, the API recognizes the retry, returns the original task ID and creates nothing new.
+</Ponder>
+
 <Callout type="tip">
 In an interview, discussing the task state machine and how each transition is persisted demonstrates that you understand how the scheduler survives failures.
 </Callout>

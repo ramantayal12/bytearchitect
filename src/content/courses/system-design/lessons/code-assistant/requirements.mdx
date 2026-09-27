@@ -51,6 +51,10 @@ Completions and chat are two different workloads. Completions need small, fast m
 - **Developer satisfaction** and task completion time in studies.
 - **Cost per active developer.**
 
+<Ponder question="Why is time to first token 'essentially the whole latency' for inline completions but not for chat?">
+A completion is only about 30 tokens, which a fast model generates in a few tens of milliseconds, while processing 1,500 tokens of context (prefill), queueing and the network take most of the time before anything appears. Chat answers are hundreds of tokens long and streamed, so generation time dominates the total, and the user reads while it streams. Completion optimization therefore focuses on prefill, prefix reuse and network distance.
+</Ponder>
+
 <KeyTakeaways>
 - A code assistant provides inline completions, repository-aware chat and multi-file edits inside the editor.
 - Completions must arrive within a few hundred milliseconds or become useless.

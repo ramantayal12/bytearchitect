@@ -1,0 +1,64 @@
+---
+title: Evaluating the Photo-Sharing Design
+---
+
+This lesson defends the photo-sharing design: we check it against the requirements, quantify its costs, walk through failures and name the trade-offs.
+
+## Requirements check
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Uploads feel instant | Upload starts when a photo is chosen; the app shows the post optimistically; processing is asynchronous |
+| Images load as users scroll | Right-sized variants in modern formats, blurred placeholders, CDN edges, client pre-fetching |
+| High availability of viewing | Viewing depends on the feed service, caches and CDN, not on the upload pipeline; everything is replicated across zones |
+| Durability | Originals and variants are stored with replication or erasure coding across failure domains before the upload is confirmed |
+| Privacy | Signed, expiring URLs for private media; permission checks during feed hydration; metadata stripped from files |
+| Eventual consistency | Posts reach followers through asynchronous fan-out within seconds; counts are aggregated |
+
+## Where the money goes
+
+A rough cost breakdown shows where optimization pays off:
+
+| Item | Driver | Main levers |
+| --- | --- | --- |
+| CDN egress | ~15 PB of image views per day | Modern formats, right-sized variants, high cache hit ratio |
+| Storage | ~400 TB of new media per day | Erasure coding for older data, cold tier for originals, deduplication |
+| Image processing | ~700 cores at peak | Efficient encoders, processing only the variants that are needed, autoscaling |
+| Feed serving and ranking | ~150,000 requests per second at peak | Caching, staged ranking |
+
+Egress and storage dominate. A 30% smaller image format saves more money than any optimization of the feed servers.
+
+## Failure scenarios
+
+| Failure | Effect | Handling |
+| --- | --- | --- |
+| Image workers fall behind | New posts stay pending longer | Queue buffers jobs; autoscale workers; prioritize small first variants so posts become visible sooner |
+| Blob store zone outage | Some objects temporarily unreachable in that zone | Reads served from other zones' replicas or fragments |
+| CDN edge outage | Viewers in that area see slower loads | Traffic routed to the next nearest edge; regional shield caches absorb misses |
+| Feed service degraded | Feed slow or less personalized | Fall back to a chronological feed from inboxes; viewing individual posts and profiles still works |
+| Moderation classifier outage | Unreviewed content may publish | Queue posts for later review, or hold uploads from high-risk accounts until the classifier recovers |
+
+## Trade-offs
+
+**Storage versus bandwidth.** Keeping four variants (plus originals) multiplies storage, but serving a 40 KB thumbnail instead of a 3 MB original to a grid view saves far more in bandwidth over the life of a photo.
+
+**Publish latency versus correctness.** Holding posts as pending until variants exist delays visibility by a few seconds, but guarantees followers never see broken images.
+
+**Cacheability versus privacy.** Public images get long-lived URLs that cache for months; private images use signed, expiring URLs that cache less effectively. The design applies each only where needed.
+
+**Freshness versus cost of ranking.** As with the newsfeed, ranking every feed request costs compute, but a chronological fallback exists when the ranking tier is under pressure.
+
+<Callout type="interview">
+When evaluating a media-heavy design, bring numbers: "Egress is about 15 petabytes a day, so every 10% reduction in image size is worth more than any server optimization." Cost awareness is a strong senior signal.
+</Callout>
+
+<Ponder question="The team proposes generating variants on demand at the CDN edge (resize when first requested) instead of precomputing four variants per upload. What are the trade-offs?">
+On-demand resizing avoids storing variants that are never requested — many photos are rarely viewed at every size — and makes adding new sizes trivial. But the first request for each variant is slower, edge compute is needed, and a viral post could trigger many simultaneous resizes unless requests are coalesced. A common hybrid precomputes the variants almost every view needs (thumbnail and feed size) and generates rarer sizes on demand, caching the results.
+</Ponder>
+
+<KeyTakeaways>
+- The design meets instant-feeling uploads, fast image loading, availability, durability and privacy through asynchronous processing, variants, CDNs and signed URLs.
+- CDN egress and storage dominate cost, so image size and storage tiering are the biggest levers.
+- Failures in processing, storage, CDN, feed or moderation degrade gracefully without breaking viewing.
+- Key trade-offs: storage for bandwidth, publish latency for correctness, and cacheability versus privacy.
+</KeyTakeaways>

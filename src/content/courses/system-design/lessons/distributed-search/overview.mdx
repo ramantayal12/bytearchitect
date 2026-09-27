@@ -2,7 +2,7 @@
 title: Designing Distributed Search
 ---
 
-Users expect to type a few words and instantly find the right product, video, document or message among billions. Databases are great at looking up a record by its key, but queries like “find all documents containing the words *wireless* and *headphones*, ranked by relevance” require a different structure and architecture. A **distributed search system** indexes large volumes of text and answers such queries in milliseconds.
+Users expect to type a few words and instantly find the right product, video, document or message among billions. Databases are great at looking up a record by its key, but queries like "find all documents containing the words *wireless* and *headphones*, ranked by relevance" require a different structure and architecture. A **distributed search system** indexes large volumes of text and answers such queries in milliseconds.
 
 ## Why a database is not enough
 
@@ -12,15 +12,24 @@ A naive approach scans every document for the query words:
 SELECT * FROM products WHERE description LIKE '%wireless%' AND description LIKE '%headphones%'
 ```
 
-This reads every row for every query — acceptable for thousands of rows, hopeless for billions. It also offers no notion of **relevance**: a product that mentions “wireless” once in a footnote ranks the same as one titled “Wireless Headphones.”
+This reads every row for every query — acceptable for thousands of rows, hopeless for billions. It also offers no notion of **relevance**: a product that mentions "wireless" once in a footnote ranks the same as one titled "Wireless Headphones."
+
+A regular B-tree index does not help either: it can find values that *start with* a prefix, but not words in the *middle* of a text field.
+
+### How much faster is an inverted index?
+
+| Approach | Work per query for 1 billion documents |
+| --- | --- |
+| Full scan | Read ~2 TB of text; minutes even when parallelized |
+| Inverted index | Read two postings lists (say, 2 million and 5 million document IDs, compressed to a few MB) and intersect them; milliseconds |
 
 Search systems solve both problems with an **inverted index** and **ranking** algorithms, and they scale by distributing the index across many machines.
 
 ## Where search appears
 
-- E-commerce product search.
+- E-commerce product search, with filters such as price, brand and rating (faceted search).
 - Searching posts, videos or people on social platforms.
-- Searching messages and documents in productivity tools.
+- Searching messages and documents in productivity tools, where results must respect permissions.
 - Log and observability search.
 - Autocomplete and typeahead (covered in its own chapter).
 
@@ -48,6 +57,17 @@ flowchart LR
   QS -->|ranked results| U
 ```
 
+## The two halves of a search system
+
+| | Indexing path | Query path |
+| --- | --- | --- |
+| Triggered by | Documents being created, updated or deleted | Users searching |
+| Volume | Tens to thousands of updates per second | Thousands to tens of thousands of queries per second |
+| Latency goal | Seconds to minutes (freshness) | Tens to hundreds of milliseconds |
+| Main work | Text analysis, building index segments, merging | Looking up postings, scoring, merging results from shards |
+
+Keeping the two paths separate lets each be optimized and scaled independently — a theme that runs through this chapter.
+
 ## Chapter roadmap
 
 1. **Requirements** in more depth, with capacity estimates.
@@ -60,9 +80,14 @@ flowchart LR
 The search index is usually **not** the source of truth. Data lives in databases and is copied into the search index, which is optimized for queries. If the index is lost, it can be rebuilt.
 </Callout>
 
+<Ponder question="A messaging app wants users to search their own messages. Why might a single shared search index for all users be a poor fit, and what alternative exists?">
+Every query must be filtered to one user's messages, so a shared index scans postings for all users and relies on filters to hide others' data — wasteful and risky if a filter bug leaks results. Partitioning the index **by user** (all of a user's messages in one shard, or a small per-user index) makes each query touch one shard, keeps results naturally isolated and lets inactive users' indexes live on cheaper storage.
+</Ponder>
+
 <KeyTakeaways>
-- Scanning documents for keywords does not scale and cannot rank by relevance.
+- Scanning documents for keywords does not scale and cannot rank by relevance; B-tree indexes cannot find words mid-text.
 - Search systems use inverted indexes and ranking, distributed across many machines.
 - Requirements: indexing, relevance-ranked search, filtering, pagination, low latency, scale, availability and freshness.
+- Indexing and query paths have very different goals and are scaled separately.
 - The search index is derived from the source of truth and can be rebuilt.
 </KeyTakeaways>

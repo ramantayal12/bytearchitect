@@ -58,6 +58,22 @@ Six characters would cover 12 billion links, but the key space would be over 20 
 Always derive the key length from your estimates. Showing that 62⁷ comfortably exceeds the number of links you expect demonstrates that your design choices follow from numbers, not habit.
 </Callout>
 
+## What a record looks like
+
+| Field | Type | Size | Notes |
+| --- | --- | --- | --- |
+| key | string (7 chars) | 7 B | Partition key |
+| long_url | string | ~100–2,000 B | Average ~200 B |
+| owner_id | int64 | 8 B | Nullable for anonymous links |
+| created_at, expires_at | timestamps | 16 B | `expires_at` drives lazy expiry |
+| flags | small int | 1–4 B | Custom alias, disabled, flagged as unsafe |
+
+With indexes, replication metadata and storage-engine overhead, ~500 bytes per record is a comfortable planning figure.
+
+<Ponder question="The estimate says reads are 100 times writes. Which component does that ratio most influence?">
+The cache. With 100 reads per write and a strongly skewed popularity distribution, most redirects can be answered from memory, so the key-value store mainly serves cache misses and new writes. It also justifies optimizing the redirect path relentlessly (in-process caches, regional deployment) while keeping the creation path simple.
+</Ponder>
+
 <KeyTakeaways>
 - A URL shortener maps short keys to long URLs and redirects visitors.
 - Redirect availability and latency matter far more than link creation.

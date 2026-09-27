@@ -76,10 +76,31 @@ flowchart LR
 
 - **Metrics, logs and traces**, with dashboards and alerts on service-level objectives.
 
+## Security essentials
+
+- **Authentication and authorization:** verify who the caller is (tokens, OAuth) and check what they may do on every request, not only at the edge.
+- **Encryption:** TLS in transit, encryption at rest, and per-tenant keys for sensitive multi-tenant data.
+- **Least privilege:** services and people get only the permissions they need; secrets live in a secrets manager, never in code.
+- **Input validation and rate limiting** at the edge protect against abuse and injection.
+
+## Numbers worth memorizing
+
+| Quantity | Value |
+| --- | --- |
+| Seconds per day | ~86,400 (round to 100,000) |
+| 1 million requests per day | ~12 per second |
+| 99.9% / 99.99% availability | ~8.8 hours / ~53 minutes of downtime per year |
+| Memory / SSD / cross-continent latency | ~100 ns / ~100 µs / ~150 ms |
+
+<Ponder question="Which single primer concept is most often missing from candidates' designs, even strong ones?">
+Idempotency on write paths that can be retried — payments, message sends, order creation, task submission. Without it, every retry after a timeout risks a duplicate, and designs that otherwise scale well quietly double-charge or double-send. Mentioning idempotency keys whenever a client or service retries a write is a small habit with a large payoff.
+</Ponder>
+
 <KeyTakeaways>
 - Horizontal scaling relies on stateless services and partitioned data.
 - DNS, load balancers, CDNs, gateways and rate limiters manage traffic.
 - Choose data stores by access pattern; replicate for availability and shard for scale.
 - Caches, queues and streams decouple components and absorb load.
 - Reliability comes from redundancy, idempotency, backoff, circuit breakers and graceful degradation.
+- Security basics — authentication, authorization, encryption and least privilege — belong in every design.
 </KeyTakeaways>

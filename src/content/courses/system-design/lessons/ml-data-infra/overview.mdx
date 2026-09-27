@@ -56,10 +56,27 @@ Generative AI adds workloads to the platform:
 Mention training-serving skew and point-in-time correctness early in an ML infrastructure interview. They are the problems that distinguish ML data platforms from ordinary analytics pipelines.
 </Callout>
 
+## Training-serving skew, concretely
+
+A fraud model uses the feature "average transaction amount over the last 30 days".
+
+| | Training pipeline (batch SQL) | Serving path (application code) |
+| --- | --- | --- |
+| Window | Calendar days, UTC | Rolling 30 × 24 hours |
+| Refunds | Excluded | Included |
+| Currency | Converted at month-end rates | Converted at live rates |
+
+Each difference is small, but together they shift the feature's distribution. The model, trained on one definition and served with another, makes worse predictions in production than in testing — and nothing crashes, so nobody notices until fraud losses rise. Defining the feature once and computing both copies from that definition removes the whole class of bugs.
+
+<Ponder question="A team trains a churn model and gets excellent accuracy, but it performs poorly in production. The training data used each user's current subscription status as a feature. What went wrong?">
+Label leakage: "current" status reflects what happened *after* the moment being predicted — a user who churned already shows as cancelled — so the model learned to read the answer from the features. Features must be taken as of each example's timestamp (point-in-time correctness), which is exactly what the dataset builder's as-of joins guarantee.
+</Ponder>
+
 <KeyTakeaways>
 - ML data infrastructure collects, processes, versions and serves data for training, serving and evaluation.
 - Training-serving skew arises when batch and real-time feature computations differ.
 - Point-in-time correctness prevents label leakage by using feature values as of each event's time.
 - Reproducible datasets and governance of personal data are core requirements.
 - LLMs add corpus processing, preference data, embedding pipelines and protected evaluation sets.
+- Small differences between batch and online feature code silently degrade production accuracy.
 </KeyTakeaways>

@@ -47,10 +47,28 @@ The summary described disabling the scaling activities that triggered the event 
 
 **Data planes should survive control-plane failures.** A strength shown during the event was that running instances largely continued to work. Designing data planes to operate without constant control-plane contact, a principle often called **static stability**, limits the impact of control-plane outages.
 
+## How retries amplify overload
+
+Suppose the network devices can handle 100,000 connection attempts per second, and normal load is 80,000. A surge pushes demand to 120,000; 20% of attempts fail.
+
+| Client behavior | What happens next |
+| --- | --- |
+| Immediate retry, unlimited | Failed attempts return instantly as retries: demand climbs to 144,000, then higher — a self-sustaining storm |
+| Exponential backoff with jitter | Retries spread over seconds; demand returns under capacity once the initial surge passes |
+| Retry budget (max 10% extra) | Retries are capped at 8,000 per second no matter how many requests fail |
+| Circuit breaker | After sustained failures, clients stop calling for a cool-down period, letting the devices recover |
+
+The right combination — backoff with jitter, budgets and breakers — makes overload self-correcting instead of self-reinforcing.
+
+<Ponder question="Your service retries calls to a dependency three times on timeout. The dependency slows down during a peak. Describe how your retries could make the incident worse, and two changes you would make.">
+Each slow call times out and is retried up to three more times, so the dependency receives up to four times its normal load exactly when it is weakest, pushing it further into overload and causing even more timeouts. Add exponential backoff with jitter so retries do not arrive in synchronized waves, and a retry budget or circuit breaker so the total extra load from retries is capped and stops entirely when the dependency is clearly failing.
+</Ponder>
+
 <KeyTakeaways>
 - An automated scaling activity triggered a surge of connections that overwhelmed devices between AWS's internal and main networks.
 - Client retries without adequate backoff sustained the congestion.
 - Monitoring and internal DNS were impaired, slowing diagnosis; running instances largely kept working.
 - Retries need backoff, jitter, budgets and circuit breakers, and failure behavior must be tested.
 - Protect shared chokepoints, keep observability independent and design data planes to be statically stable.
+- Unbounded retries turn a brief overload into a sustained one; backoff, jitter, budgets and breakers make overload self-correcting.
 </KeyTakeaways>

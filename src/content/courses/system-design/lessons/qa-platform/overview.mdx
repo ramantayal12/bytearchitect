@@ -40,10 +40,23 @@ Evolving a simple design into a scalable one is a strong interview strategy. It 
 
 Many ideas carry over from other chapters. The home feed borrows from the **newsfeed** design. Search uses the **distributed search** building block. Vote counts use **sharded counters**. Media in answers, such as images, lives in a **blob store** behind a **CDN**. Recognizing these reusable pieces lets you move quickly to the parts unique to a Q&A platform: ranking answers and recommending questions to the right experts.
 
+## Three audiences, three workloads
+
+| Audience | Share of traffic | What they need | Design implication |
+| --- | --- | --- | --- |
+| Anonymous readers from search engines | Most page views | A fast question page | Cache rendered pages at the edge; fast time to first byte |
+| Signed-in members | A minority of users, most sessions | Personalized feed, notifications | Precomputed feeds, per-user state |
+| Writers and experts | A small fraction | Posting, editing, seeing their impact | Strongly consistent writes, read-your-writes, notifications |
+
+<Ponder question="Why does page speed for anonymous readers matter so much to a Q&A platform's business?">
+Most visitors arrive from search engines, which take page speed into account when ranking results, and impatient visitors leave slow pages. Faster question pages mean better search placement, more visitors and more of them converting into members and writers. That is why edge caching of rendered pages for anonymous readers is one of the highest-value decisions in this design.
+</Ponder>
+
 <KeyTakeaways>
 - A Q&A platform is read-heavy, with a hot set of popular questions and a long tail reached from search engines.
 - Answers are ranked by quality using votes, author credibility and engagement, not by time.
 - Signed-in members expect a personalized feed, which introduces a newsfeed-style fan-out problem.
 - The chapter starts with a simple design and evolves it by fixing bottlenecks, a useful interview technique.
 - Many components reuse building blocks: search, sharded counters, blob store, CDN and newsfeed ideas.
+- Anonymous readers, members and writers form three distinct workloads with different design needs.
 </KeyTakeaways>

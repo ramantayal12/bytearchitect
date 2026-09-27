@@ -11,6 +11,18 @@ Photos, videos, audio files, documents, backups, machine-learning datasets — m
 - **Write once, read many.** Objects are rarely modified after upload; updates usually create a new object or version.
 - **Enormous in aggregate.** Platforms store petabytes to exabytes across billions of objects.
 
+## Block, file and object storage
+
+| | Block storage | File storage | Object (blob) storage |
+| --- | --- | --- | --- |
+| Unit | Fixed-size blocks on a virtual disk | Files in a directory tree | Whole objects in a flat namespace |
+| Interface | Disk device (read and write blocks) | POSIX: open, seek, write, lock, rename | HTTP: PUT, GET, DELETE, LIST |
+| Modify in place | Yes | Yes | No — replace the object or write a new version |
+| Scale | One volume attached to one server | Shared, but hard to scale globally | Practically unlimited |
+| Typical use | Database and VM disks | Shared home directories, legacy apps | Media, backups, data lakes, static assets |
+
+Block storage gives databases the low-latency random writes they need. File storage offers familiar semantics to many clients. Object storage gives up in-place edits and directories to gain near-unlimited scale, very high durability and a simple interface any client can use over HTTP.
+
 ## The data model
 
 Blob stores typically organize data as:
@@ -27,7 +39,9 @@ flowchart TB
   C2 --> B3["blob: u42/2024/beach_320.jpg"]
 ```
 
-Blob names often look like paths, but the namespace is flat; the slashes are just part of the name.
+Blob names often look like paths, but the namespace is flat; the slashes are just part of the name. Listing "folders" is really listing names that share a prefix.
+
+Some blob stores offer different **blob types** optimized for different workloads: **block blobs** assembled from uploaded blocks (most files), **append blobs** that support efficient appends (logs), and **page blobs** with random-access pages (virtual disks).
 
 ## Where blob stores appear in designs
 
@@ -38,17 +52,48 @@ Blob names often look like paths, but the namespace is flat; the slashes are jus
 - Data lakes for analytics and machine learning.
 - Backups and archives.
 
-Blob stores also differ from file systems. A traditional file system supports in-place edits, locking, hierarchical directories and POSIX semantics, which are hard to scale across thousands of machines. A blob store deliberately offers a simpler contract — whole-object writes, reads by name, and listing by prefix — in exchange for near-unlimited scale, high durability and a simple HTTP interface that any client can use.
-
 A common pattern pairs a blob store with a database: the **database stores metadata** (owner, caption, timestamps, blob location), while the **blob store holds the bytes**.
 
+## Uploading directly to the blob store
+
+Routing every upload through application servers wastes their bandwidth and CPU. Instead, the application hands the client a short-lived **presigned URL** that authorizes one specific upload, and the client sends the bytes straight to the blob store.
+
+```mermaid
+sequenceDiagram
+  participant App as Mobile app
+  participant API as Photo service
+  participant BS as Blob store
+  participant DB as Metadata DB
+  App->>API: request upload (photo, 3 MB)
+  API->>API: authorize user, choose key u42/9f1c.jpg
+  API-->>App: presigned PUT URL (valid 10 min)
+  App->>BS: PUT bytes to presigned URL
+  BS-->>App: 200 OK
+  App->>API: upload complete (key)
+  API->>DB: save photo metadata
+```
+
+The same idea works for downloads of private files: a presigned GET URL lets a client or CDN fetch one object for a limited time without the application proxying the bytes.
+
 <Callout type="interview">
-Never store large media in your primary database. Say: “Media goes to a blob store; the database stores the blob's key and metadata; a CDN serves popular media.” It is one of the most common and important patterns in design interviews.
+Never store large media in your primary database. Say: "Media goes to a blob store; the database stores the blob's key and metadata; a CDN serves popular media." It is one of the most common and important patterns in design interviews.
 </Callout>
+
+<Ponder question="In the presigned upload flow, the client uploads the photo but crashes before telling the API it finished. What state is the system in, and how would you clean it up?">
+The blob exists in the store but no metadata references it — an orphan that no user can see. Handle it with a lifecycle rule or background job that deletes objects under the upload prefix that have no metadata row after, say, 24 hours; or have the blob store emit an "object created" event that the service consumes to create or verify the metadata itself, so completion does not depend on the client.
+</Ponder>
+
+## Chapter roadmap
+
+1. **Requirements** — operations, durability and capacity.
+2. **Design** — separating metadata from data, and the write, read and delete paths.
+3. **Design considerations** — replication versus erasure coding, placement, repair, metadata partitioning and storage tiers.
+4. **Evaluation** — how the design meets its requirements.
 
 <KeyTakeaways>
 - Blob stores hold large, unstructured, mostly immutable objects at massive scale.
+- Object storage trades in-place edits and directories for scale, durability and a simple HTTP interface, unlike block and file storage.
 - Data is organized into accounts, containers and blobs in a flat namespace.
 - Databases handle metadata; blob stores handle the bytes; CDNs deliver popular content.
-- Blob stores appear in nearly every media, file or analytics-heavy design.
+- Presigned URLs let clients upload and download directly, keeping large transfers off application servers.
 </KeyTakeaways>

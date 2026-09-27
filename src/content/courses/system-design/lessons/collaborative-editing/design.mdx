@@ -100,10 +100,28 @@ Comments are stored separately through the document API and are **anchored** to 
 
 If a session server crashes, clients detect the dropped connection and reconnect. The router's lease on the document expires, and another server takes ownership, loads the latest snapshot and replays the operation log. Operations the log had acknowledged are safe; unacknowledged client operations are still pending on the clients and are resent.
 
+## The operation log
+
+| Field | Example | Purpose |
+| --- | --- | --- |
+| doc_id (partition key) | `d-5521` | All of a document's operations together |
+| version (clustering key) | `42` | Total order assigned by the owning session server |
+| author_id, client_op_id | `alice`, `a-7f3` | Attribution and deduplication of retried sends |
+| op | `insert(118, "s", {bold})` | The transformed operation |
+| lease_token | `19` | Fencing: rejected if older than the current owner's token |
+| ts | timestamp | History and grouping by time |
+
+Appends are conditional on the version not already existing and the lease token being current, which makes the log the arbiter of both order and ownership.
+
+<Ponder question="A client sends an operation, the connection drops before the acknowledgment arrives, and the client resends it after reconnecting. How does the server avoid applying it twice?">
+Every operation carries a client-generated ID. The session server (and the log) remember recently applied IDs per document; when the resent operation arrives, the server recognizes the ID and replies with the original version number instead of applying it again. The client then treats it as acknowledged and continues — the same idempotency pattern as in messaging.
+</Ponder>
+
 <KeyTakeaways>
 - One session server owns each open document, giving a total order of operations without per-keystroke consensus.
 - Clients apply edits locally, send them with their base version and keep a pending queue until acknowledged.
 - The server transforms, versions and durably logs each operation before acknowledging and broadcasting it.
 - Periodic snapshots make opening fast and form the basis of version history.
 - Presence is ephemeral and throttled; comments are anchored to ranges that move with edits.
+- The per-document operation log records version, author, client operation ID and lease token for ordering, dedup and fencing.
 </KeyTakeaways>

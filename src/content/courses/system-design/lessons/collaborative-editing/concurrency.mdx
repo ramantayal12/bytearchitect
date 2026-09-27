@@ -81,6 +81,10 @@ Both are valid choices. For a centrally hosted editor with a server per document
 You do not need to derive transformation functions in an interview. Explain the problem, show one transformation example, and compare OT and CRDTs in terms of central ordering, offline support and overhead.
 </Callout>
 
+<Ponder question="Alice and Bob both type a character at exactly the same position at the same moment. How does a sequence CRDT decide which comes first, and why does it not matter which rule is used?">
+Both insertions reference the same predecessor character, so the CRDT breaks the tie deterministically — for example, by comparing the inserting replicas' IDs or the operations' logical timestamps. Any rule works as long as every replica applies the same one, because convergence only requires that all copies end up identical. Users see the two characters side by side in some order, which is acceptable for truly simultaneous typing.
+</Ponder>
+
 <KeyTakeaways>
 - OT transforms position-based operations against concurrent ones so every replica converges.
 - OT is usually paired with a central server that orders operations, which simplifies correctness.

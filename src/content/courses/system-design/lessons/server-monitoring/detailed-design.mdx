@@ -12,20 +12,62 @@ A time-series database organizes data around **series** (a metric name plus a un
 - Every couple of hours, the head block is compressed and written to disk as an immutable block.
 - Older blocks are merged (compacted) and eventually downsampled and moved to cheap blob storage.
 
-Compression is remarkably effective. Timestamps arrive at regular intervals, so storing the *difference of differences* often needs only a bit or two. Values change slowly, so XOR-ing each value with the previous one leaves mostly zero bits. Together these reduce samples from 16 bytes to around 1–2 bytes.
+```mermaid
+flowchart LR
+  W["Incoming samples"] --> WAL["Write-ahead log"]
+  W --> H["Head block<br/>(memory, last ~2 h)"]
+  H -->|"every 2 h"| B1["Block: 2 h<br/>compressed, immutable"]
+  B1 -->|compaction| B2["Block: 1 day"]
+  B2 -->|"downsample and upload"| OBJ[("Blob store<br/>long-term")]
+```
+
+### Compression, worked through
+
+Compression is remarkably effective. Consider a series scraped every 10 seconds:
+
+| Timestamp | Delta | Delta of delta |
+| --- | --- | --- |
+| 12:00:00 | — | — |
+| 12:00:10 | 10 | — |
+| 12:00:20 | 10 | 0 |
+| 12:00:30 | 10 | 0 |
+| 12:00:41 | 11 | 1 |
+
+Because scrapes are regular, the *difference of differences* is almost always 0, which can be encoded in a single bit; small jitters take a few bits. Values change slowly too: a gauge reading 72.5, 72.5, 72.6 shares its sign, exponent and most of its mantissa bits with the previous value, so XOR-ing each value with the previous one leaves mostly zero bits, which are stored as short run lengths. Together these reduce samples from 16 bytes to around **1–2 bytes**, which is why a single node can keep hours of data for millions of series in memory.
+
+### Finding series quickly
 
 An **inverted index** maps each label value to the series that contain it, so a query such as `service="checkout" AND status="500"` quickly finds the matching series.
+
+```text
+service="checkout"  -> [s1, s4, s9, s12, ...]
+status="500"        -> [s4, s7, s12, ...]
+intersection        -> [s4, s12]
+```
+
+This is the same structure search engines use for words and documents, applied to labels and series.
 
 ## Querying
 
 Queries select series by labels, restrict them to a time range and apply functions:
 
 ```text
-rate(http_requests_total{service="checkout", status=~"5.."}[5m])
-  / rate(http_requests_total{service="checkout"}[5m])
+sum(rate(http_requests_total{service="checkout", status=~"5.."}[5m]))
+  / sum(rate(http_requests_total{service="checkout"}[5m]))
 ```
 
 This computes the checkout error ratio over the last five minutes. The query service fans out to the relevant shards, fetches the blocks covering the range, computes per-shard partial results and merges them. Frequently used expensive queries can be precomputed as **recording rules**, which store their results as new series.
+
+```mermaid
+flowchart LR
+  Q["Query: error ratio for checkout"] --> QS["Query service"]
+  QS --> S1["Shard 1<br/>partial sums"]
+  QS --> S2["Shard 2<br/>partial sums"]
+  QS --> S3["Shard 3<br/>partial sums"]
+  S1 & S2 & S3 --> M["Merge and divide"]
+```
+
+Sums and counts merge exactly, which is why systems push aggregation down to shards. Percentiles are computed from merged histogram buckets rather than merged percentiles.
 
 ## Alert evaluation
 
@@ -64,7 +106,25 @@ flowchart LR
 </Slide>
 </Slides>
 
-The “for” duration prevents flapping alerts from brief spikes. Grouping ensures that when a database fails and fifty services start erroring, the on-call engineer receives one grouped notification rather than fifty.
+The "for" duration prevents flapping alerts from brief spikes. Grouping ensures that when a database fails and fifty services start erroring, the on-call engineer receives one grouped notification rather than fifty. **Inhibition** rules go further: if the "database down" alert is firing, suppress the dependent "high error rate" alerts from services that use it.
+
+An alert rule, written as configuration:
+
+```yaml
+- alert: CheckoutErrorBudgetFastBurn
+  expr: |
+    (sum(rate(http_requests_total{service="checkout",status=~"5.."}[1h]))
+      / sum(rate(http_requests_total{service="checkout"}[1h]))) > 14.4 * 0.001
+    and
+    (sum(rate(http_requests_total{service="checkout",status=~"5.."}[5m]))
+      / sum(rate(http_requests_total{service="checkout"}[5m]))) > 14.4 * 0.001
+  for: 2m
+  labels: { severity: page, team: payments }
+  annotations:
+    runbook: https://runbooks.example.com/checkout-errors
+```
+
+The long window proves the problem is significant; the short window proves it is still happening, so the alert resolves quickly once the problem is fixed.
 
 ## Making alerting highly available
 
@@ -79,10 +139,15 @@ Alerting is the most critical function; it must work during outages:
 Alert on **SLO burn rate** — how quickly the error budget is being consumed — rather than raw thresholds. A fast burn pages immediately; a slow burn creates a ticket. This catches real user impact while reducing noise.
 </Callout>
 
+<Ponder question="Two replicas of the rules engine both detect the same firing alert. Why doesn't the on-call engineer get paged twice?">
+Both replicas send the alert, with identical labels, to the alert manager cluster. The alert manager identifies alerts by their label set, deduplicates them, and groups them with related alerts before notifying. Its members share which notifications have already been sent through gossip, so even if the replicas' alerts reach different alert manager instances, only one page goes out.
+</Ponder>
+
 <KeyTakeaways>
-- TSDBs append samples to an in-memory head block with a WAL, then persist compressed immutable blocks.
-- Delta-of-delta and XOR encoding compress samples to about 1–2 bytes.
-- An inverted index on labels enables fast series selection; recording rules precompute expensive queries.
-- Alerts move from pending to firing after a sustained condition and are grouped and deduplicated.
+- TSDBs append samples to an in-memory head block with a WAL, then persist compressed immutable blocks that are compacted and eventually moved to blob storage.
+- Delta-of-delta timestamps and XOR-encoded values compress samples to about 1–2 bytes.
+- An inverted index on labels enables fast series selection; recording rules precompute expensive queries; sums and histogram buckets merge exactly across shards.
+- Alerts move from pending to firing after a sustained condition and are grouped, deduplicated and inhibited.
+- Burn-rate rules with long and short windows catch real impact and resolve quickly.
 - Replicated rule evaluation, clustered alert managers and a dead man's switch keep alerting available.
 </KeyTakeaways>

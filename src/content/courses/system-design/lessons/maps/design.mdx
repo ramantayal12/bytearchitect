@@ -89,10 +89,40 @@ flowchart LR
 
 Pings are anonymized before aggregation: only speeds on edges are kept, not trajectories tied to users.
 
+## A route request, step by step
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant G as API gateway
+  participant R as Routing service
+  participant T as Live traffic store
+  participant E as ETA model
+  C->>G: GET /routes?from=...&to=...
+  G->>R: route request (region of start and end)
+  R->>R: snap endpoints to nearest road edges
+  R->>T: current weight version for affected cells
+  R->>R: search overlay graph, unpack shortcuts
+  R->>E: route features (segments, turns, time of day)
+  E-->>R: corrected ETA
+  R-->>C: 3 alternatives with polylines, steps, ETAs
+```
+
+## Geocoding and reverse geocoding
+
+**Geocoding** turns text into coordinates. The query is normalized ("St" → "Street"), parsed into components (house number, street, city, postcode), and matched against an address index; place names go through the search index. Results are ranked by text match, proximity to the user's current map view and popularity.
+
+**Reverse geocoding** turns coordinates into an address: find the nearest road segment or address point using a spatial index (for example, a geohash or S2-cell index), then interpolate the house number along the segment.
+
+<Ponder question="Why are vector tiles preferred over pre-rendered image tiles for a modern maps app?">
+Vector tiles send geometry and labels rather than pixels, so they are much smaller, can be rendered crisply at any screen density, rotated and tilted, and restyled (dark mode, highlighting a route) on the device without new downloads. One set of vector tiles serves every style and language, whereas image tiles would need a separate rendered set for each. The trade-off is more work on the client's GPU.
+</Ponder>
+
 <KeyTakeaways>
 - Tiles have stable zoom and coordinate URLs, are stored in a blob store and served through a CDN.
 - An offline pipeline turns source data into tiles, a road graph and a places database, rolled out region by region.
 - Routing snaps endpoints to the graph, searches with time-dependent edge weights and refines results with an ETA model.
 - Navigation map-matches pings, checks whether the user is on route and triggers rerouting.
 - Streaming processors turn anonymized pings into live speeds per road edge.
+- Routing snaps endpoints, searches the overlay graph with the current weight version and refines ETAs with a model.
 </KeyTakeaways>

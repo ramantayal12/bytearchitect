@@ -74,6 +74,10 @@ Even without failures, keeping replicas strongly consistent requires coordinatio
 - Many systems mix them: a payment ledger is PC/EC while the product catalog is PA/EL.
 - Many stores are **tunable**, for example through quorum settings or per-query consistency levels, so the choice can be made per operation.
 
+<Ponder question="A team says their database is 'CA' because they have never experienced a network partition. What is wrong with that claim?">
+Partitions are not something you get to opt out of; they happen through switch failures, misconfigurations, overloaded links and long garbage-collection pauses that look like partitions. The question is only what the system does when one occurs — refuse some requests (CP) or keep answering with possibly stale data (AP). A system that has not decided will make that choice accidentally, often in the worst way.
+</Ponder>
+
 <KeyTakeaways>
 - CAP: during a network partition, a replicated system must choose between consistency and availability.
 - Partitions are unavoidable, so "pick two" really means choosing C or A when a partition happens.

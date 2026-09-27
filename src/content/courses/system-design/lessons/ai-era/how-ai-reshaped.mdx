@@ -56,9 +56,25 @@ flowchart LR
 AI design problems are still system design problems. Interviewers expect you to use queues, caches, sharding and load balancing, while showing awareness of GPU constraints, token economics and model quality.
 </Callout>
 
+## Latency, measured differently
+
+| Metric | Meaning | What drives it |
+| --- | --- | --- |
+| Time to first token (TTFT) | How long until the first word appears | Queueing, prompt length (prefill), network |
+| Time per output token (TPOT) | Gap between streamed tokens | Model size, batch size, memory bandwidth |
+| End-to-end latency | TTFT + output tokens × TPOT | Mostly the length of the answer |
+| Throughput | Tokens per second per GPU | Batching efficiency, quantization |
+
+A 400-token answer at 30 ms per token takes 12 seconds to finish even though the first word appears in half a second — which is why streaming is essential and why "requests per second" alone says little about capacity.
+
+<Ponder question="An LLM-backed feature returns HTTP 200 for every request, and error-rate dashboards are green, yet users say answers got worse after a model upgrade. What monitoring was missing?">
+Quality monitoring. With models, a response can be successful at the protocol level but wrong, unhelpful or unsafe. The system needs evaluation sets run before rollout, online signals such as thumbs-up/down, regeneration rates and escalation rates, and canary comparisons of those signals between old and new models — the model equivalent of comparing error rates during a deployment.
+</Ponder>
+
 <KeyTakeaways>
 - LLM workloads are slow, expensive, GPU-bound, probabilistic and billed by tokens.
 - New building blocks include inference servers, model gateways, retrieval with vector indexes, guardrails and evaluation pipelines.
 - Classic principles adapt: time to first token, token-based rate limits, prefix caching and quality-aware canaries.
 - Hallucinations, prompt injection, data leakage and non-determinism are new failure modes to design for.
+- Time to first token and time per output token replace simple request latency as the key performance metrics.
 </KeyTakeaways>

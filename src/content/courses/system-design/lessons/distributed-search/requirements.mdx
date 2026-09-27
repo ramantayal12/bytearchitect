@@ -13,6 +13,46 @@ Let's make the requirements concrete for a large search system — for example, 
 - **Pagination:** users fetch results in pages.
 - **Deletion:** removed or private videos disappear from results promptly.
 
+## API
+
+```http
+GET /v1/search?q=wireless+headphones
+              &filter=language:en,duration:<600
+              &sort=relevance
+              &page_size=20
+              &cursor=eyJzY29yZSI6MTIuNCwiaWQiOiJ2XzgxMiJ9
+```
+
+```json
+{
+  "results": [
+    { "id": "v_812", "title": "Best wireless headphones of the year", "score": 12.4,
+      "snippet": "...tested 30 <em>wireless</em> <em>headphones</em>...", "views": 1840021 }
+  ],
+  "nextCursor": "eyJzY29yZSI6MTEuOSwiaWQiOiJ2XzY2MCJ9",
+  "totalEstimate": 48210
+}
+```
+
+Results include **highlighted snippets** so users can see why a result matched, and a **cursor** rather than a page number, which scales better for deep pagination (see the design lesson).
+
+## The indexed document
+
+The indexing pipeline converts each source record into a search document with typed fields:
+
+| Field | Type | Used for |
+| --- | --- | --- |
+| id | keyword | Identity, deduplication |
+| title | analyzed text, boosted | Full-text match, strong relevance weight |
+| description, transcript | analyzed text | Full-text match |
+| channel_name | analyzed text + keyword | Match and exact filter |
+| language, category | keyword | Filters and facets |
+| upload_date | date | Filter, sort, freshness boost |
+| duration_s, views | numeric | Filter, sort, popularity signal |
+| visibility | keyword | Hide private or removed videos |
+
+Analyzed text fields go through tokenization and stemming; keyword fields are stored exactly for filtering; numeric and date fields are stored in structures optimized for ranges and sorting.
+
 ## Non-functional requirements
 
 - **Latency:** p99 under 200 ms end to end.
@@ -58,13 +98,27 @@ flowchart LR
   C -->|no, reformulated| B[Poor signal]
 ```
 
+| Metric | Question it answers |
+| --- | --- |
+| Precision at 10 | Of the top 10 results, how many are relevant? |
+| Recall | Of all relevant documents, how many did we return? |
+| Mean reciprocal rank | How high is the first relevant result, on average? |
+| Zero-result rate | How often does a query return nothing? |
+
+Ranking changes are usually tested with **A/B experiments**: a small share of users gets the new ranking, and click and engagement metrics are compared before rolling out.
+
 <Callout type="tip">
 In interviews, focus on the infrastructure — indexing pipeline, index partitioning, query fan-out — unless asked about ranking. Mentioning that ranking combines text relevance with quality signals is usually sufficient.
 </Callout>
 
+<Ponder question="Why must the 'visibility' field be part of the index rather than checked afterwards against the database for each result?">
+If visibility were only checked afterwards, the shards would return top results that include private or removed videos, the coordinator would drop them, and a page could end up with too few (or zero) results — or require expensive extra rounds. Filtering inside the index keeps ranking and pagination correct and avoids a database lookup per result. A fast post-check for very recent changes can still complement it.
+</Ponder>
+
 <KeyTakeaways>
 - Functional needs include indexing, keyword search, ranking, filtering, pagination and deletions.
+- The API returns ranked results with snippets and a cursor; indexed documents have typed fields for matching, filtering and sorting.
 - Non-functional targets: p99 latency under ~200 ms, thousands of QPS, billions of documents, high availability and freshness within about a minute.
 - Index size and query volume require partitioning and replication.
-- Search quality is measured with user behavior signals and offline relevance evaluation.
+- Search quality is measured with behavior signals, offline metrics and A/B experiments.
 </KeyTakeaways>

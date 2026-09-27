@@ -90,10 +90,45 @@ Production systems often use **S2** (a hierarchy of cells on a sphere, mapped on
 A strong answer picks one approach and justifies it: "Businesses change rarely and density varies a lot, so I'd use an in-memory quadtree replicated on every search server, rebuilt from the database every few minutes."
 </Callout>
 
+## Encoding a geohash, worked through
+
+For a point at latitude 37.7749, longitude −122.4194:
+
+1. Longitude range [−180, 180]: −122.4 is in the lower half → bit 0; range becomes [−180, 0].
+2. Latitude range [−90, 90]: 37.8 is in the upper half → bit 1; range becomes [0, 90].
+3. Longitude [−180, 0]: −122.4 is in the lower half → 0; range [−180, −90].
+4. Latitude [0, 90]: 37.8 is in the lower half → 0; range [0, 45].
+5. Longitude [−180, −90]: −122.4 is in the upper half → 1 …
+
+Every 5 bits become one base-32 character. Continuing, the point encodes to `9q8yy…`; a restaurant a few hundred meters away shares the prefix `9q8yy`, while one across the bay might share only `9q8`.
+
+## Evaluating the design
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Low latency | In-memory index on every server, a handful of cells per query, cached summaries |
+| High availability | Many identical stateless replicas across regions; snapshots stored durably |
+| Scalability | Add replicas for more searches; index size grows slowly with businesses |
+| Eventual consistency | Changes flow through events to snapshots within minutes |
+| Privacy | User locations are used per request and not stored with identities |
+
+| Failure | Effect | Handling |
+| --- | --- | --- |
+| Index builder stalls | New and edited businesses appear late | Servers keep serving the last snapshot; alert on snapshot age |
+| A search server fails | Less capacity | Load balancer routes to other replicas |
+| Summary cache node fails | More reads hit replicas | Cache refills; replicas absorb the load |
+| Bad snapshot published | Wrong results | Validate snapshots (counts, sample queries) before rollout; keep the previous version for rollback |
+
+<Ponder question="A search at the edge of a 1 km radius uses 6-character geohashes (about 1.2 km × 0.6 km cells). Why might searching only the nine surrounding cells still miss results in some directions?">
+6-character cells are not square: they are about twice as wide as they are tall, so the nine-cell block extends roughly 1.8 km horizontally but only 0.9 km vertically from the center cell's edges. In the short direction, a 1 km circle can extend beyond the block. Choose a precision whose smaller cell dimension exceeds the radius, or compute the exact set of cells that overlap the circle (as S2 and H3 coverers do).
+</Ponder>
+
 <KeyTakeaways>
 - Geohashes encode locations as strings where a longer shared prefix usually means closer points.
 - Always search the user's geohash cell and its eight neighbors to avoid boundary misses.
 - Quadtrees split dense areas recursively, adapting to density and supporting k-nearest queries.
 - Geohashes are simple to store and update; quadtrees adapt better but must be held in memory and rebuilt.
 - S2 and H3 offer hierarchical cell IDs that combine easy storage with flexible coverage.
+- Geohashes interleave longitude and latitude bits, five bits per base-32 character.
+- Snapshot validation and rollback protect against publishing a bad index.
 </KeyTakeaways>

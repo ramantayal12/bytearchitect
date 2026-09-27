@@ -59,6 +59,20 @@ In real projects, the two alternate. Designing reveals new questions (can we acc
 - Separate facts (requirements, constraints) from choices (architecture, technology) in documents and discussions.
 - When a design debate stalls, it is often because the requirements are unclear; return to analysis.
 
+## Analysis questions that change designs
+
+| Analysis question | Why the answer changes the design |
+| --- | --- |
+| Can users tolerate seeing slightly stale data? | Decides caching and consistency models |
+| What happens if we lose the last few seconds of writes? | Decides synchronous versus asynchronous replication |
+| Where are users, and are there data residency rules? | Decides regions and data placement |
+| How spiky is traffic, and is it predictable? | Decides pre-scaling, queues and admission control |
+| Who operates this, and how large is the team? | Decides managed services versus self-hosting, monolith versus services |
+
+<Ponder question="Two senior engineers argue for an hour about whether to use a relational database or a key-value store. What analysis step might resolve it?">
+Clarifying the access patterns and guarantees the product needs: which queries must be fast, whether multi-row transactions are required, expected write volume and growth, and whether ad-hoc querying matters. The argument usually stalls because each engineer is assuming different requirements; writing them down often makes the choice obvious.
+</Ponder>
+
 <KeyTakeaways>
 - System analysis determines what a system must do and why; system design determines how it will do it.
 - Analysis produces requirements, models and feasibility assessments; design produces architecture, interfaces and design documents.

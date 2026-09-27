@@ -24,6 +24,15 @@ Free-form text logs such as `Payment failed for user 42 after 3 retries` are eas
 
 Structured fields can be indexed and filtered precisely (`service = payment AND event = payment_failed`), aggregated into metrics, and parsed without fragile regular expressions.
 
+| | Unstructured text | Structured JSON |
+| --- | --- | --- |
+| Writing | Easy, any format | Needs a logging library and field conventions |
+| Filtering by a value | Regular expressions, fragile | Exact field match |
+| Aggregation (count by error type) | Parse text first | Direct |
+| Format changes | Silently break parsers | Fields can be added safely |
+
+Organizations benefit from a **shared schema** — common field names such as `service`, `trace_id`, `user_id` and `duration_ms` — so that one query works across every team's logs.
+
 ## Log levels
 
 Levels indicate severity and let systems control volume:
@@ -36,7 +45,7 @@ Levels indicate severity and let systems control volume:
 | ERROR | Failures affecting a request or operation |
 | FATAL | The process cannot continue |
 
-Production systems typically log INFO and above, with the ability to enable DEBUG dynamically for a specific service or request when investigating.
+Production systems typically log INFO and above, with the ability to enable DEBUG dynamically for a specific service or request when investigating — for example, a request header that turns on debug logging for that one request as it travels through every service.
 
 ## Correlation with trace IDs
 
@@ -52,6 +61,8 @@ sequenceDiagram
   Note over GW,P: every log line includes trace_id=a1b2
 ```
 
+Logging libraries attach the current trace ID automatically from request context, so developers do not have to remember to include it.
+
 ## Controlling volume and cost
 
 Logs are often the largest source of observability cost. Common techniques:
@@ -61,18 +72,34 @@ Logs are often the largest source of observability cost. Common techniques:
 - **Tiered retention** — keep recent logs in fast, searchable storage for days; move older logs to cheap archive storage for months or years.
 - **Aggregating** repetitive events into metrics instead of logging each one.
 
+### Sample by request, not by line
+
+Sampling individual lines at random breaks correlation: you might keep the gateway's log for a request but drop the payment service's. Instead, decide once per request — for example, keep all logs for requests whose trace ID hashes into a 5% bucket — and always keep every log for requests that end in an error. Every service applies the same rule to the same trace ID, so sampled requests remain complete end to end.
+
+| Log type | Typical policy |
+| --- | --- |
+| Errors and warnings | Keep 100% |
+| Request logs for successful calls | Keep a 1–10% sample by trace ID |
+| Health checks and polling | Keep under 1%, or convert to metrics |
+| Debug logs | Off, enabled per service or per request when needed |
+| Audit events | Keep 100%, separate pipeline |
+
 ## Privacy and security
 
-Logs frequently leak sensitive data: passwords, tokens, personal information. Good practices include redacting sensitive fields at the source, restricting access by role, encrypting logs at rest and in transit, and enforcing retention limits required by regulations.
+Logs frequently leak sensitive data: passwords, tokens, personal information. Good practices include redacting sensitive fields at the source, restricting access by role, encrypting logs at rest and in transit, and enforcing retention limits required by regulations. Data-protection rules may also require deleting a user's personal data on request — much easier if logs reference users by an internal ID rather than by name or email, and if retention is short.
 
 <Callout type="warning">
 Never log secrets or full payment details. Once written, sensitive data spreads to indexes, backups and archives, and is very hard to purge completely.
 </Callout>
 
+<Ponder question="A service logs the full HTTP request body for every call 'to help debugging'. What problems will this cause?">
+Volume and cost explode (bodies can be kilobytes each, at thousands of requests per second), and bodies routinely contain passwords, tokens, card numbers and personal data that then spread into indexes, archives and backups, violating security and privacy rules. Log a small, structured summary instead — endpoint, sizes, status, duration, IDs — and capture full payloads only with explicit, temporary, access-controlled debugging, with redaction.
+</Ponder>
+
 <KeyTakeaways>
-- Structured (JSON) logs are far easier to index, filter and aggregate than free text.
-- Log levels control severity and volume; DEBUG can be enabled selectively.
-- Propagated trace IDs correlate logs for a single request across services.
-- Sampling, rate limiting, tiered retention and aggregation control log volume and cost.
-- Redact sensitive data at the source and restrict access to logs.
+- Structured (JSON) logs with a shared schema are far easier to index, filter and aggregate than free text.
+- Log levels control severity and volume; DEBUG can be enabled selectively per service or request.
+- Propagated trace IDs, attached automatically, correlate logs for a single request across services.
+- Sampling (by request, not by line), rate limiting, tiered retention and aggregation control log volume and cost.
+- Redact sensitive data at the source, restrict access to logs and keep retention short.
 </KeyTakeaways>

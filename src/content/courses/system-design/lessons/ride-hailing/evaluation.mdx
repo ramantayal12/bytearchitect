@@ -50,9 +50,27 @@ A crucial principle: **trips in progress must continue**, even if parts of the s
 When defending your design, walk through a failure during an active trip. Interviewers want to see that you have thought about the rider stuck in a car when a service goes down.
 </Callout>
 
+## Latency budget for matching
+
+| Step | Budget |
+| --- | --- |
+| Trip request through gateway to trip service, persist trip | 50 ms |
+| Nearby-driver lookup in the city's in-memory index | 5 ms |
+| ETA to pickup for top 10 candidates (routing service, batched) | 80 ms |
+| Reserve best driver (compare-and-set) and push offer | 50 ms |
+| Driver sees offer and decides | 3–15 s (human) |
+| Assignment pushed to rider | 100 ms |
+
+Almost all of the time to match is the driver's decision. The system's own work takes a few hundred milliseconds, which is why offers must expire quickly and fall through to the next candidate.
+
+<Ponder question="The payment processor is down for 30 minutes. Should riders still be able to request trips?">
+Usually yes, for riders with an established history and a previously verified payment method: trips continue, authorizations and captures are queued and retried idempotently when the processor returns, and the business accepts a small risk of failed payments. For new accounts or high-risk signals, the platform may require a successful authorization first. Blocking all trips would turn a payment outage into a total outage for riders and drivers.
+</Ponder>
+
 <KeyTakeaways>
 - The design meets latency, correctness and availability requirements with per-city in-memory indexes, leased reservations and idempotent payments.
 - Demand spikes are handled with surge pricing, batched matching, orderly queuing and finer partitions for hot areas.
 - Trips in progress must survive failures; apps hold trip state locally and resync later.
 - Strong consistency is limited to reservations and payments; everything else is eventually consistent.
+- The system's own matching work takes hundreds of milliseconds; the driver's decision dominates time to match.
 </KeyTakeaways>

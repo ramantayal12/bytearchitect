@@ -72,9 +72,35 @@ flowchart LR
 
 A launch moment creates a predictable thundering herd. Mitigations include pre-scaling the serving tier, releasing by time zone or region, using feature flags to throttle availability, and making the experience degrade gracefully: if the summary API is overloaded, the app shows a friendly "come back soon" message rather than failing.
 
+## Sizing the batch and the launch
+
+```text
+Users:                    500 million
+Events per user per year: ~20,000 (plays, skips, likes)  → ~10 trillion events
+Summary per user:         ~5 KB                           → ~2.5 TB of results
+Launch-day traffic:       100 million opens in 6 hours    → ~4,600 requests/s average,
+                          with the first hour at maybe 5–10× that
+```
+
+The batch job is enormous but has weeks to run and can use cheap, preemptible compute. The serving side is modest by comparison — a few terabytes in a key-value store and tens of thousands of lookups per second — as long as nothing is computed on request.
+
+## Computing "top 5 artists" at scale
+
+A naive job sorts each user's plays by artist. A scalable job works in two stages:
+
+1. **Map:** read events and emit `(user, artist) → play minutes`, combining counts locally before shuffling to cut network traffic.
+2. **Reduce:** group by user, keep a small heap of the top 5 artists per user, and emit the summary document.
+
+Percentile comparisons ("you were in the top 1% of listeners of this artist") need a second pass: first compute per-artist distributions of listening time across all users, then join each user's minutes against them.
+
+<Ponder question="Engineers discover a bug in the genre calculation three days before launch. Why is the batch design a relief in this situation?">
+Inputs are frozen at the cut-off date, so the fix can be applied and the affected jobs rerun deterministically — producing corrected summaries without depending on live data or user traffic. Validation runs again, and the corrected documents replace the old ones in the serving store before launch. In a compute-on-request design, the bug would be live the moment users opened the feature.
+</Ponder>
+
 <KeyTakeaways>
 - Year-in-review features precompute each user's summary in batch rather than on request.
 - A data cut-off, distributed batch jobs and automated validation make results correct and reproducible.
 - Serving is a single key-value lookup per user, with static assets pre-positioned on the CDN.
 - Launch spikes are managed by pre-scaling, gradual rollout by region and graceful degradation.
+- The batch is huge but has weeks to run; the launch-day serving path is a modest key-value lookup.
 </KeyTakeaways>

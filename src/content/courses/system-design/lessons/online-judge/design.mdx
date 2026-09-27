@@ -93,10 +93,26 @@ Time limits are measured as **CPU time** of the user process, not wall-clock tim
 
 Contest standings rank users by problems solved, then by penalty time. The leaderboard service updates a **sorted set** in an in-memory store when a verdict arrives, keyed by a composite score, so ranks and top-N pages are fast. Near the end of contests, many platforms **freeze** the public leaderboard, which also reduces read load.
 
+## Data model
+
+| Table | Key | Main fields |
+| --- | --- | --- |
+| problems | problem_id | Statement reference, limits, checker reference, test set version |
+| submissions | submission_id | user_id, problem_id, contest_id, language, code reference, status, verdict, runtime, memory, created_at |
+| submission_tests | (submission_id, test_index) | Per-test verdict, time, memory (only kept for recent submissions) |
+| contest_scores | (contest_id, user_id) | Solved count, penalty, per-problem attempts |
+
+Code and large outputs are stored in the blob store; the submissions table keeps references. Test sets are **versioned**, so a verdict always records which version it was judged against, and re-judging after a test fix is a deliberate batch job.
+
+<Ponder question="A submitted program contains an infinite loop that also forks new processes as fast as it can. Which sandbox layers stop it, and what does the judge report?">
+The process-count limit (a pids cgroup) stops the fork bomb from creating more than a handful of processes; the CPU-time limit and a wall-clock timeout stop the loop; and the whole sandbox is destroyed afterwards, so nothing survives. The judge reports Time Limit Exceeded (or a runtime error if process creation failed first), and the host and other submissions are unaffected because each sandbox has its own limits.
+</Ponder>
+
 <KeyTakeaways>
 - Execution capacity is the dominant resource; contests multiply load several times near deadlines.
 - Submissions are stored, queued by priority and judged asynchronously, with verdicts pushed to clients.
 - Sandboxes layer isolation, resource limits, no network, read-only file systems, syscall filters and disposal.
 - CPU-time limits on dedicated, uniform hardware make verdicts fair and reproducible.
 - Pre-scaled workers, prioritized queues and sorted-set leaderboards handle contest traffic.
+- Versioned test sets make verdicts reproducible and re-judging a deliberate operation.
 </KeyTakeaways>

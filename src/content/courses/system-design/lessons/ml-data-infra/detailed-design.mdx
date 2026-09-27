@@ -77,10 +77,26 @@ Pipelines include **data quality checks** on schema, null rates, value ranges an
 - **Consent and deletion:** when a user requests deletion, their records are removed from the lake and feature stores, and datasets built afterwards exclude them. Periodic retraining ensures models stop depending on deleted data.
 - **Lineage** answers "which models used this source?" for audits and incident response.
 
+## Evaluating the platform
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Petabyte-scale storage | Columnar files on object storage with an open table format |
+| No training-serving skew | Features defined once and materialized to offline and online stores from the same logic |
+| Point-in-time correctness | As-of joins over timestamped feature histories |
+| Low-latency serving | Online key-value store, one lookup per entity, parallel across entities |
+| Reproducibility | Dataset versions pinned to table snapshots and code versions |
+| Governance | Column-level access control, deletion propagation, lineage |
+
+<Ponder question="A user asks for their data to be deleted. It has already been used in a model trained last month. What does the platform do?">
+It deletes the user's records from the lake (typically by rewriting affected files through the table format's delete support), the offline and online feature stores and any derived datasets built afterwards, and records the deletion so future dataset builds exclude the user. For models already trained, organizations typically rely on regular retraining schedules so models stop depending on deleted data within a defined period; lineage identifies which models are affected.
+</Ponder>
+
 <KeyTakeaways>
 - As-of joins attach the latest feature value before each label's timestamp, preventing leakage.
 - Streaming features use event-time windows and write to both online and offline stores to avoid skew.
 - Online feature serving uses one key-value lookup per entity, with freshness checks and defaults.
 - Dataset versions record queries, feature code, table snapshots and splits, making rebuilds exact.
 - Sharded files, parallel loaders and prefetching keep accelerators busy; quality checks, drift monitoring and governance keep the platform trustworthy.
+- The platform meets scale, consistency, reproducibility and governance needs through layered storage, a shared feature store and lineage.
 </KeyTakeaways>

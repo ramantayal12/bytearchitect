@@ -60,9 +60,24 @@ We will design a deployment system with:
 Deployment interviews reward operational thinking. Talk about blast radius, observability and rollback before you talk about file copying.
 </Callout>
 
+## Rough numbers
+
+| Assumption | Value | Consequence |
+| --- | --- | --- |
+| Services | 2,000 | Many independent pipelines and rollout plans |
+| Deployments per day | 5,000 | ~1 new rollout starting every 17 seconds on average |
+| Hosts per large service | up to 50,000 | Artifact distribution must be peer-assisted |
+| Artifact size | 200 MB–1 GB | 50,000 × 500 MB = 25 TB per full rollout if fetched centrally |
+| Target rollout duration | 30–60 minutes | Waves plus bake time; emergency rollback in minutes |
+
+<Ponder question="Why must the deployment system avoid depending on the services it deploys — for example, using the company's main database or service mesh for its own state?">
+During an incident, the deployment system is how engineers ship the fix or roll back. If it depends on the broken service (say, a shared database that is overloaded), it breaks at exactly the moment it is needed most. Deployment infrastructure is therefore built on minimal, separately operated dependencies, often in multiple regions, so it keeps working when everything else is failing.
+</Ponder>
+
 <KeyTakeaways>
 - A deployment system builds, stores, distributes and rolls out artifacts to many servers safely.
 - The hard parts are scale, efficient artifact distribution, safety, knowing what runs where and the deployer's own reliability.
 - Rollouts are progressive: canary, then waves by zone and region, with health checks between them.
 - Rolling, blue-green, canary and feature flags each trade simplicity, capacity and risk differently.
+- Thousands of deployments per day across tens of thousands of hosts make distribution and safety the core problems.
 </KeyTakeaways>

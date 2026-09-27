@@ -62,6 +62,20 @@ In a **service mesh**, each service instance has a **sidecar proxy** that handle
 
 Proxies add a hop and can become bottlenecks or single points of failure, so they are deployed redundantly and kept lightweight.
 
+## Where you have already met reverse proxies
+
+| Course component | Reverse-proxy role |
+| --- | --- |
+| Load balancer | Distributes requests to healthy backends |
+| API gateway | Routes by path, authenticates, rate limits |
+| CDN edge | Caches and serves content on behalf of origins |
+| Search coordinator | Fans out queries to shards on behalf of the client |
+| Service mesh sidecar (inbound) | Terminates TLS, enforces policy, records metrics |
+
+<Ponder question="Why do many companies force all outbound traffic from production services through a forward proxy?">
+It gives a single place to control and audit which external destinations services may reach. If a service is compromised, the attacker cannot freely send data to arbitrary servers, because the egress proxy only allows approved domains. It also centralizes TLS inspection policies, logging and outbound rate limits to third-party APIs.
+</Ponder>
+
 <KeyTakeaways>
 - A forward proxy acts for clients; a reverse proxy acts for servers.
 - Forward proxies provide filtering, egress control, caching and client anonymity.

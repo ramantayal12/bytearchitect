@@ -42,6 +42,21 @@ flowchart LR
 The most effective preparation is repetition with feedback. Ten problems practiced aloud with honest review are worth more than thirty read passively.
 </Callout>
 
+## A reading checklist by topic
+
+| Topic | Look for material on |
+| --- | --- |
+| Storage | B-trees versus LSM trees, replication, partitioning, transactions and isolation levels |
+| Consistency | Linearizability, causal consistency, quorums, consensus (Raft, Paxos) |
+| Streaming | Logs, exactly-once processing, windowing, watermarks |
+| Reliability | SLOs and error budgets, incident response, chaos engineering |
+| Performance | Tail latency, caching strategies, load balancing algorithms |
+| AI systems | Inference serving and batching, retrieval-augmented generation, evaluation |
+
+<Ponder question="After reading an engineering blog post about how a company built its feed, what should you write down to get the most learning out of it?">
+The requirements and scale they faced, the building blocks they chose, the trade-offs they accepted and why, what broke or surprised them, and what they changed later. Then map it back to the course: which pattern is this, and when would you choose differently? This turns a story into reusable judgment.
+</Ponder>
+
 <KeyTakeaways>
 - Deepen knowledge with foundational books, original papers, engineering blogs, postmortems and open-source systems.
 - Practice problems aloud under time pressure using SCALED, then compare and record what you missed.

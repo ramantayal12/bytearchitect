@@ -47,6 +47,10 @@ Separating them is the key design decision: the serving path is read-only and bl
 The trie is the heart of the typeahead interview. Be ready to explain why storing the top k suggestions at every node turns an expensive subtree search into a single lookup.
 </Callout>
 
+<Ponder question="Why not answer typeahead requests with the same inverted index that powers full search?">
+An inverted index answers "which documents contain these words?" and ranks documents; typeahead needs "which popular *queries* start with these characters?", ranked by how often people search them, within a couple of milliseconds, a million times per second. Prefix lookups over a few hundred million queries map naturally onto a trie with precomputed answers, while an inverted index would need expensive prefix expansion and scoring on every keystroke.
+</Ponder>
+
 <KeyTakeaways>
 - Typeahead suggests popular query completions for the prefix a user has typed.
 - It receives a request per keystroke and must respond far faster than the user types.

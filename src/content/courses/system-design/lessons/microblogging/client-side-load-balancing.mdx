@@ -56,6 +56,10 @@ The main cost is **complexity in clients**: every language needs a well-maintain
 
 Timeline rendering fans out to many services with tight latency budgets. Eliminating a network hop per call, balancing on observed latency and failing over instantly to another instance keep tail latency low. And with no central load balancer on the internal path, a burst of traffic during a global event cannot overwhelm a shared balancing tier.
 
+<Ponder question="A new version of the RPC library has a bug that marks healthy instances as unhealthy after one slow response. Why is this worse with client-side load balancing than with a central load balancer, and how would you limit the damage?">
+The bug ships inside every service that upgrades the library, so it can affect thousands of callers at once, each independently ejecting healthy backends — potentially concentrating traffic on a few instances and causing cascading overload. Limit the damage with gradual rollouts of library versions, a cap on the fraction of instances any client may eject at once ("panic threshold"), and fleet-wide telemetry comparing ejection rates across library versions.
+</Ponder>
+
 <KeyTakeaways>
 - Dedicated internal load balancers add a hop, a potential bottleneck and operational overhead at large scale.
 - Client-side load balancing lets each caller pick a backend using a service registry and a balancing algorithm.

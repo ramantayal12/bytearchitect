@@ -60,10 +60,29 @@ Real-time scoring uses rules plus a model to return **allow**, **challenge** (su
 Never let fraud checks block the core flow for the majority of legitimate users. Keep the synchronous model fast, fail open for low-risk cases if the fraud service is down, and move deeper analysis offline.
 </Callout>
 
+## A ledger entry, concretely
+
+A $20.00 trip with a 25% platform fee and $1.20 of tax produces one balanced journal entry:
+
+| Account | Debit | Credit |
+| --- | --- | --- |
+| Rider card receivable | $21.20 | |
+| Driver earnings payable | | $15.00 |
+| Platform fee revenue | | $5.00 |
+| Tax payable | | $1.20 |
+| **Total** | **$21.20** | **$21.20** |
+
+Debits always equal credits. If a bug records the driver's credit twice, the entry no longer balances and the write is rejected — which is why double-entry ledgers catch errors that a single `balance` column never would. A later $3.00 refund is a new entry reversing part of the original, never an edit to it.
+
+<Ponder question="The capture call to the payment processor times out. The payment service does not know whether the rider was charged. What should it do?">
+Keep the payment in a `capture_pending` state and retry the capture with the **same idempotency key**; if the first attempt succeeded, the processor returns the original result instead of charging again. If retries keep failing, a recovery job queries the processor for the status of that key and resolves the state. What it must never do is issue a new capture with a new key, which could charge the rider twice.
+</Ponder>
+
 <KeyTakeaways>
 - Payments authorize at request time and capture the final fare after the trip.
 - Idempotency keys, a persisted payment state machine and recovery jobs prevent double charges and lost payments.
 - A double-entry, append-only ledger records every money movement and is reconciled against processor reports.
 - Fraud detection combines fast real-time scoring with offline graph and anomaly analysis.
 - Fraud checks must not slow legitimate users; deep analysis runs asynchronously.
+- Balanced double-entry journal entries make accounting errors detectable, and corrections are new entries.
 </KeyTakeaways>

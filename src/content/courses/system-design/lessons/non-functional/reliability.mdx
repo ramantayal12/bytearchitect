@@ -2,7 +2,7 @@
 title: Reliability
 ---
 
-**Reliability** is the probability that a system performs its intended function correctly, without failure, over a given period. Availability asks, “Is the system up right now?” Reliability asks, “Will it keep working correctly, and how often does it fail?”
+**Reliability** is the probability that a system performs its intended function correctly, without failure, over a given period. Availability asks, "Is the system up right now?" Reliability asks, "Will it keep working correctly, and how often does it fail?"
 
 ## Availability versus reliability
 
@@ -13,6 +13,13 @@ The two are related but not identical:
 - A system can also be up and responding yet **incorrect** — returning wrong balances, for example. It is available but not reliable.
 
 Reliability therefore includes correctness, not just responsiveness.
+
+| Scenario | Available? | Reliable? |
+| --- | --- | --- |
+| Restarts for 1 second every minute | Mostly (98%+) | No — frequent errors |
+| Perfect for 11 months, down 1 week | No for that year | Yes, between failures |
+| Always responds, sometimes wrong totals | Yes | No — incorrect results |
+| Rarely fails, recovers in seconds | Yes | Yes |
 
 ## Measuring reliability
 
@@ -32,39 +39,67 @@ They connect to availability through a simple formula:
 availability = MTBF / (MTBF + MTTR)
 ```
 
+**Worked example.** A service fails on average once every 30 days (MTBF = 720 hours) and takes 1 hour to restore (MTTR = 1 hour). Availability is `720 / 721 ≈ 99.86%`. Two ways to reach 99.99%:
+
+- Make failures 70 times rarer (MTBF ≈ 10,000 hours) — very hard.
+- Cut recovery to about 4 minutes (MTTR ≈ 0.07 hours) — achievable with automatic failover.
+
 This reveals two ways to improve availability: fail less often (increase MTBF) or recover faster (decrease MTTR). In large distributed systems, component failures are so frequent that **reducing MTTR** — through automation, good monitoring and fast rollbacks — is often the more practical lever.
 
 <Callout type="tip">
-Many teams also track **mean time to detect (MTTD)**. You cannot repair what you have not noticed; strong monitoring and alerting shorten the whole recovery cycle.
+Many teams also track **mean time to detect (MTTD)**. You cannot repair what you have not noticed; strong monitoring and alerting shorten the whole recovery cycle. MTTR is really MTTD + time to diagnose + time to fix + time to verify.
 </Callout>
+
+## Failures are routine at scale
+
+If a hard disk has an annual failure rate of about 1.5%, a fleet of 100,000 disks sees roughly 1,500 failures a year — about **four a day**. Similar arithmetic applies to servers, memory modules, power supplies and network links. At scale, "the component failed" is not an incident; it is Tuesday. Reliable systems therefore treat component failure as a normal event handled automatically, and reserve human attention for failures the automation cannot handle.
 
 ## Sources of unreliability
 
 Failures come from many directions:
 
 - **Hardware faults** — disks, memory and network cards fail. At scale, some hardware is always failing.
-- **Software bugs** — especially in rarely exercised code paths such as error handling and failover logic.
+- **Software bugs** — especially in rarely exercised code paths such as error handling and failover logic. A leap second, a certificate expiry or a counter overflowing after 2³¹ increments can take down every instance at once.
 - **Human error** — misconfigurations and mistaken commands cause a large share of real outages.
 - **Overload** — sudden traffic spikes, retry storms and resource exhaustion.
 - **Dependencies** — third-party services and shared infrastructure can fail and drag your system down.
 
+Software and configuration failures are especially dangerous because they are **correlated**: the same bug exists on every server, so redundancy does not help. Gradual rollouts are the main defense.
+
 ## Building reliable systems
 
 - **Redundancy and replication** so that hardware faults do not lose data or service.
-- **Testing failure paths** — chaos engineering deliberately injects failures to verify that recovery mechanisms work.
+- **Testing failure paths** — chaos engineering deliberately injects failures to verify that recovery mechanisms work. Netflix popularized the practice with tools that randomly terminate production instances, and later whole zones, to prove the system survives.
 - **Defensive design** — timeouts, retries with backoff, bulkheads that isolate resources, and circuit breakers.
-- **Data integrity checks** — checksums and validation catch corruption before it spreads.
+- **Data integrity checks** — checksums and validation catch corruption before it spreads; end-to-end checks catch bugs that per-component checks miss.
 - **Automation and guardrails** — reviewed configuration changes, gradual rollouts and automatic rollbacks reduce human error.
 - **Blameless post-mortems** — learning from every incident so the same failure does not recur.
 
+## Learning from incidents
+
+A good post-mortem answers a standard set of questions without assigning personal blame:
+
+1. **What happened?** A timeline from first symptom to full recovery.
+2. **What was the impact?** Users affected, duration, data lost or delayed.
+3. **Why did it happen?** Root causes and contributing factors — usually several.
+4. **Why wasn't it caught earlier?** Gaps in testing, monitoring or review.
+5. **What will we change?** Concrete actions with owners, prioritized by how much risk they remove.
+
+The blameless part matters: if people fear punishment, they hide mistakes and the organization stops learning.
+
+<Ponder question="A team has 99.99% availability but users still complain about errors. How can both be true?">
+Availability may be measured in a way that misses the errors: time-based health checks pass while a fraction of real requests fail, or errors are concentrated in one region or one feature that is small overall. The service may also return wrong results that count as "successful" responses. Measure request-level success from the user's perspective, broken down by region and endpoint, and include correctness checks where possible.
+</Ponder>
+
 ## Reliability in interviews
 
-When discussing reliability, go beyond “add replicas.” Explain *what* can fail, *how* you would detect it and *how* the system recovers. For example: “If a storage node dies, the coordinator detects missed heartbeats within ten seconds and re-replicates its data from the remaining copies, so we maintain three replicas.”
+When discussing reliability, go beyond "add replicas." Explain *what* can fail, *how* you would detect it and *how* the system recovers. For example: "If a storage node dies, the coordinator detects missed heartbeats within ten seconds and re-replicates its data from the remaining copies, so we maintain three replicas."
 
 <KeyTakeaways>
 - Reliability is the probability of correct operation over time; it includes correctness, not just uptime.
 - MTBF measures how often failures occur; MTTR measures how quickly you recover.
-- availability = MTBF / (MTBF + MTTR), so faster recovery improves availability.
-- Failures come from hardware, software, humans, overload and dependencies.
-- Reliable systems combine redundancy, failure testing, defensive design and learning from incidents.
+- availability = MTBF / (MTBF + MTTR), so faster recovery is often the most practical way to improve availability.
+- At scale, component failures happen daily and must be handled automatically.
+- Failures come from hardware, software, humans, overload and dependencies; software and configuration faults are correlated.
+- Reliable systems combine redundancy, chaos testing, defensive design and blameless post-mortems.
 </KeyTakeaways>

@@ -88,6 +88,21 @@ flowchart LR
 Explaining a concept aloud to someone else, or to a recording, is the fastest way to find out whether you really understand it.
 </Callout>
 
+## Self-test: explain these in one minute each
+
+Try answering aloud before checking the relevant lesson:
+
+1. Why does a single hot row limit write throughput, and what are two fixes?
+2. What does W + R > N guarantee, and what does it not guarantee?
+3. How does a fencing token prevent a paused leader from corrupting data?
+4. When would you choose a sliding window counter over a token bucket?
+5. Why do search engines use scatter-gather, and what does it do to tail latency?
+6. What is training-serving skew, and how does a feature store prevent it?
+
+<Ponder question="You can explain a concept's definition but not when you would use it. Does that count as knowing it?">
+Not for interviews. Interviewers probe applications — "would you use it here, and what does it cost?" — rather than definitions. For each concept, prepare one concrete scenario where it is the right tool and one where it is not. That is the difference between recalling vocabulary and exercising design judgment.
+</Ponder>
+
 <KeyTakeaways>
 - For each concept, be able to explain what it is, when to use it and what it costs.
 - The checklist spans foundations, networking, data, caching and messaging, coordination, reliability, specialized structures and AI concepts.

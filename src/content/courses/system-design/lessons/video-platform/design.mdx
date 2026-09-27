@@ -125,10 +125,69 @@ Because segments are small, immutable files with stable URLs, CDNs cache them ex
 
 The metadata service publishes changes to the search index asynchronously, so search is eventually consistent. Likes and views are high-volume writes; they go to the wide-column store through a queue, and counts are aggregated with sharded counters and cached.
 
+## Data model in more detail
+
+```sql
+CREATE TABLE videos (
+  video_id      BIGINT PRIMARY KEY,        -- time-ordered ID from the sequencer
+  channel_id    BIGINT NOT NULL,
+  title         TEXT,
+  description   TEXT,
+  status        TEXT,                      -- uploading | processing | ready | failed | removed
+  duration_s    INT,
+  manifest_url  TEXT,                      -- points to the encoded blob store / CDN
+  thumbnail_url TEXT,
+  visibility    TEXT,                      -- public | unlisted | private
+  created_at    TIMESTAMP
+);
+-- Sharded by video_id; a secondary table (channel_id, created_at DESC, video_id) serves channel pages.
+```
+
+Comments are stored in the wide-column store with partition key `video_id` and clustering key `comment_id DESC`, so "latest comments for this video" is a single sequential read.
+
+## The encoding ladder
+
+A typical ladder for a 16:9 video, using H.264 for broad compatibility:
+
+| Rendition | Resolution | Approximate bitrate |
+| --- | --- | --- |
+| 240p | 426 × 240 | 0.3 Mbps |
+| 360p | 640 × 360 | 0.7 Mbps |
+| 480p | 854 × 480 | 1.2 Mbps |
+| 720p | 1280 × 720 | 2.5 Mbps |
+| 1080p | 1920 × 1080 | 5 Mbps |
+| 4K | 3840 × 2160 | 15–20 Mbps |
+
+Lower rungs keep playback going on weak networks; higher rungs serve large screens on fast connections. Audio is encoded separately so it can be shared across video renditions.
+
+## The processing pipeline as a DAG
+
+```mermaid
+flowchart LR
+  V["Validate file<br/>(format, duration)"] --> SP["Split into chunks"]
+  V --> TH["Generate thumbnails"]
+  V --> MOD["Moderation and<br/>copyright checks"]
+  SP --> E1["Encode chunks: 240p–720p"] & E2["Encode chunks: 1080p–4K"]
+  E1 & E2 --> PK["Stitch and package<br/>segments + manifest"]
+  PK & TH & MOD --> PUB["Publish: status ready,<br/>index for search, notify"]
+```
+
+Independent steps run in parallel, and each step is idempotent, so a failed step is retried without redoing the others. Publishing waits for moderation, which keeps unsafe content from ever going live.
+
+## Counting views
+
+A "view" is recorded when the player reports that playback passed a threshold (say, 30 seconds or the whole clip if shorter). View events go to a queue, are deduplicated and filtered for bots in a stream processor, and are aggregated into sharded counters; the displayed count is read from a cache and may lag by seconds. Raw events also flow to analytics for creators.
+
+<Ponder question="A creator uploads the exact same 3 GB file twice by mistake. How could the system avoid storing and encoding it twice?">
+Compute a content hash (for example, over the chunks as they upload) and check whether an identical file already exists for that creator. If so, the second video can reference the existing encoded renditions instead of re-encoding — saving storage and thousands of CPU-seconds — while still getting its own video ID and metadata. The same idea, applied carefully across users, underlies deduplication in file-sync services.
+</Ponder>
+
 <KeyTakeaways>
 - Uploads are resumable, chunked and written directly to the blob store through pre-signed URLs.
 - Metadata lives in a sharded relational database, engagement data in a wide-column store, and video bytes in a blob store.
 - An asynchronous, queue-driven pipeline splits videos into chunks and encodes them in parallel into a ladder of renditions.
 - Adaptive bitrate streaming serves small, immutable segments described by a manifest, which CDNs cache efficiently.
 - Search indexing and engagement counts are updated asynchronously and are eventually consistent.
+- The encoding ladder spans roughly 0.3–20 Mbps; processing is an idempotent DAG that publishes only after moderation.
+- Views are counted through a queue, deduplicated and aggregated with sharded counters.
 </KeyTakeaways>

@@ -76,6 +76,21 @@ Choose the hardest or most interesting parts, or ask the interviewer which they 
 If you run short on time, compress Layout rather than skipping Defend. Interviewers weigh the discussion of trade-offs and failures heavily.
 </Callout>
 
+## The template filled in: a notification service in 45 minutes
+
+| Step | What you would say or draw |
+| --- | --- |
+| Scope | Send push, email and SMS for other teams; respect preferences and quiet hours; 1B notifications per day; no loss; per-provider rate limits |
+| Capacity | ~12,000 per second average, 10× campaign peaks; payloads ~1 KB; status records ~1 TB per month |
+| API and data | `send(userId, template, channel, idempotencyKey)`, `status(id)`; tables for notifications, preferences, templates |
+| Layout | API → per-channel queues → workers → providers; scheduler for campaigns; preference cache; status store |
+| Evolve | Deduplication with idempotency keys; retries with backoff under provider throttling; priority lanes for security codes |
+| Defend | At-least-once with idempotent sends; channel isolation; queue-lag monitoring; what breaks at 10× (provider limits) |
+
+<Ponder question="The interviewer interrupts during Layout and asks a deep question about retries. Should you stick to the template's order?">
+No — the template is a guide, not a script. Answer the question, since it shows what the interviewer cares about, then briefly note where you are ("I'll finish the layout and come back to retries in the deep dive") so the conversation keeps its structure. Adapting smoothly to the interviewer's priorities is itself a signal of seniority.
+</Ponder>
+
 <KeyTakeaways>
 - Spend roughly 5, 5, 5, 10, 15 and 5 minutes on the six SCALED steps in a 45-minute interview.
 - Scope with targeted questions and write requirements down.

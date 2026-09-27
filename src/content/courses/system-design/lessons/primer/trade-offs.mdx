@@ -68,6 +68,21 @@ The simplest design that meets the requirements is usually best. Microservices, 
 A strong way to present a trade-off: "We could do A, which gives X but costs Y, or B, which gives Y but costs X. For this product, X matters more because…, so I'll choose A."
 </Callout>
 
+## Trade-offs by design problem
+
+| Problem | Main trade-off | Choice made in the course |
+| --- | --- | --- |
+| News feed | Push versus pull fan-out | Hybrid by audience size |
+| Payments | Consistency versus availability | Consistency, with idempotency and reconciliation |
+| Video platform | Storage versus bandwidth | Store many renditions to save bandwidth |
+| Typeahead | Freshness versus cost | Scheduled rebuilds plus a small trending trie |
+| Key-value store | Consistency versus latency | Tunable quorums per request |
+| Ride-hailing | Greedy versus batched matching | Batch when busy, greedy when quiet |
+
+<Ponder question="An interviewer asks, 'Why not strong consistency everywhere, to be safe?' How would you answer?">
+Strong consistency costs latency (coordination on every write, often across zones or regions) and availability (requests fail during partitions), and it limits scalability. For likes, feeds and view counts, slightly stale data harms no one, so paying those costs buys nothing. Reserve strong consistency for the data where staleness causes real harm — money, inventory, uniqueness — and choose per data type.
+</Ponder>
+
 <KeyTakeaways>
 - Choose consistency for money, inventory and uniqueness, and availability for social and content features.
 - Batching trades latency for throughput; push trades write cost for read speed.

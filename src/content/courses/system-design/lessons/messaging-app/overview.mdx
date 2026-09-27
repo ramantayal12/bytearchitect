@@ -43,6 +43,10 @@ This design uses several building blocks from Part II: a **sequencer** for messa
 A messaging interview usually centers on three questions: how do clients stay connected, how does a message reach an offline user, and how do you guarantee ordering without duplicates? Plan your time so you can answer all three.
 </Callout>
 
+<Ponder question="Why can't a messaging app simply have clients poll the server every few seconds for new messages?">
+With hundreds of millions of devices polling every few seconds, the servers would handle hundreds of millions of mostly empty requests per second, each with connection and authentication overhead, and messages would still arrive with a delay of up to the polling interval. Polling also drains mobile batteries by waking the radio constantly. A persistent connection lets the server push messages the moment they arrive, with only small periodic heartbeats when idle.
+</Ponder>
+
 <KeyTakeaways>
 - Messaging requires real-time delivery over persistent connections to hundreds of millions of devices.
 - Offline users need reliable store-and-forward delivery plus push notifications.

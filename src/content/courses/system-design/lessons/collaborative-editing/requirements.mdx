@@ -58,6 +58,10 @@ Although the total operation rate is large, each individual document has a small
 | Opening a document | under 1 to 2 seconds |
 | Restoring a version | a few seconds |
 
+<Ponder question="Ten million operations per second sounds like it needs a huge distributed log. Why can the design still route each document to a single server?">
+The total is large but it is the sum of millions of independent documents, each with only a few operations per second. No single document needs more than one server's capacity, so documents can be spread across many session servers, each owning a subset. Ordering is only needed within a document, so there is no global bottleneck — the same insight as per-conversation sequence numbers in the messaging design.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are real-time co-editing of rich text, presence, comments, version history, permissions and offline editing.
 - Collaborators must converge with no lost edits, while local edits appear instantly.

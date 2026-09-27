@@ -12,6 +12,10 @@ A public API receives a sudden flood of requests — maybe a buggy client stuck 
 - **Fairness and business tiers.** Enforce plan quotas — free users get 100 requests per minute, paid users 10,000.
 - **Protect downstream systems.** Keep traffic within what databases and dependencies can handle.
 
+### A concrete example
+
+A login endpoint allows unlimited attempts. An attacker with a list of 10 million leaked password combinations tries them at 5,000 requests per second — all of them in about half an hour. With a limit of 5 attempts per account per 15 minutes and 100 per IP address per hour, the same attack would need years per account and would be detected long before.
+
 ## How limits are expressed
 
 A rate limit usually combines:
@@ -19,6 +23,16 @@ A rate limit usually combines:
 - **Who:** the key to count by — user ID, API key, IP address, or a combination such as user plus endpoint.
 - **What:** which requests count — all requests, one endpoint, or weighted by cost.
 - **How many per how long:** such as 100 requests per minute, or 5 login attempts per 15 minutes.
+
+| Scenario | Key | Limit |
+| --- | --- | --- |
+| Public API, free tier | API key | 100 requests per minute, 10,000 per day |
+| Login | Account ID, and separately IP address | 5 per 15 minutes per account; 100 per hour per IP |
+| Search (expensive) | User ID | 10 per second, each costing 5 units of a 50-unit budget |
+| SMS verification codes | Phone number | 3 per hour |
+| Unauthenticated traffic | IP address or subnet | 1,000 per minute at the edge |
+
+Weighting requests by **cost** is useful when operations differ greatly: a search that scans many shards might consume ten units while a simple read consumes one.
 
 When a client exceeds its limit, the service typically responds with HTTP **429 Too Many Requests** and headers telling the client when to retry:
 
@@ -29,6 +43,8 @@ X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
 X-RateLimit-Reset: 1735689600
 ```
+
+Well-behaved clients read these headers and back off. Successful responses usually carry the same headers so clients can slow down *before* hitting the limit.
 
 ## Where rate limiting happens
 
@@ -42,6 +58,23 @@ flowchart LR
 
 Rate limiting is often layered: coarse limits at the edge to stop floods cheaply, precise per-client limits at the API gateway, and fine-grained limits inside services for expensive operations. Clients can also throttle themselves to respect known limits.
 
+## Rate limiting versus load shedding
+
+The two are often confused:
+
+| | Rate limiting | Load shedding |
+| --- | --- | --- |
+| Question | "Is this client using more than its share?" | "Is the system overloaded right now?" |
+| Decided by | Per-client counters and rules | Server health: CPU, queue length, latency |
+| Rejects | Only clients over their quota | Any request, often lowest priority first |
+| Protects against | Abusive or buggy individual clients | Overall overload, even from well-behaved clients |
+
+A robust system uses both: rate limits keep any one client within bounds, and load shedding protects the service when the total legitimate load exceeds capacity.
+
+<Ponder question="Should a rate limiter count requests by IP address for a mobile app used over cellular networks?">
+Be careful. Mobile carriers often place thousands of users behind a few shared IP addresses (carrier-grade NAT), so a per-IP limit could block many legitimate users at once. For authenticated traffic, limit by user or API key instead; reserve IP-based limits for unauthenticated endpoints and set them generously, possibly combined with other signals such as device fingerprints.
+</Ponder>
+
 ## Chapter roadmap
 
 1. **Requirements** for a distributed rate limiter.
@@ -50,7 +83,8 @@ Rate limiting is often layered: coarse limits at the edge to stop floods cheaply
 
 <KeyTakeaways>
 - Rate limiters cap how many requests a client can make in a period, protecting capacity, security, cost and fairness.
-- Limits specify who is counted, what counts and how many per time window.
-- Exceeding a limit typically returns HTTP 429 with retry information.
+- Limits specify who is counted, what counts (possibly weighted by cost) and how many per time window.
+- Exceeding a limit typically returns HTTP 429 with retry information; headers let clients slow down in advance.
 - Rate limiting is layered across the edge, API gateway, services and clients.
+- Rate limiting controls individual clients; load shedding protects the whole system from overload.
 </KeyTakeaways>

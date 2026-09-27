@@ -43,6 +43,10 @@ Production platforms obsess over **quality of experience** metrics: time to firs
 You do not need to cover all of this in an interview. Mentioning one or two refinements, such as per-title encoding or ISP-embedded caches, with a sentence on why they matter at scale, signals real depth.
 </Callout>
 
+<Ponder question="A new codec saves 30% bandwidth but takes 10 times the CPU to encode. Should every upload use it?">
+Usually not. For the long tail of videos with a few hundred views, the bandwidth saved is tiny compared with the extra encoding cost. For a video with millions of views, a 30% bandwidth saving is worth far more than the encoding. So encode everything with the cheap codec first and re-encode with the new codec once a video crosses a popularity threshold — the popularity-aware policy described above.
+</Ponder>
+
 <KeyTakeaways>
 - Per-title and per-scene encoding choose bitrates by content complexity, saving bandwidth at equal quality.
 - Expensive modern codecs are applied selectively to popular videos, where the bandwidth savings pay off.

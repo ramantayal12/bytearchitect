@@ -59,6 +59,10 @@ With a few million drivers and riders connected at peak, the service maintains m
 
 Trips are local: a rider in one city is never matched with a driver in another. This makes **city or region** a natural partition key for location data and matching, which limits the blast radius of failures and lets each region scale independently.
 
+<Ponder question="Why not store every driver location update as a row in a relational database and query it with a spatial index?">
+At 750,000 updates per second, each an index-updating write, the database would be overwhelmed, and almost all of those rows are obsolete within seconds — only the latest position per driver matters for matching. Durable writes buy nothing for data that will be replaced four seconds later. An in-memory index holding the latest position per driver, rebuilt from the update stream after a crash, fits the data's ephemeral nature.
+</Ponder>
+
 <KeyTakeaways>
 - Riders request, track and pay for trips; drivers share location and accept offers.
 - Matching must be fast and must never double-assign a driver; payments must be exact.

@@ -57,10 +57,38 @@ Expiration uses the same two mechanisms as the URL shortener: check `expires_at`
 
 Paste services are used to share leaked credentials and malware configuration. Rate limits per IP address and account, automated scanning for secrets and known malicious patterns, and a reporting and takedown process are standard. Private and unlisted pastes are excluded from search engines with appropriate headers.
 
+## API
+
+```http
+POST   /v1/pastes   { content, syntax?, expiresIn?, visibility, burnAfterRead? } -> { key, url }
+GET    /v1/pastes/{key}          -> { content, syntax, createdAt, expiresAt }
+GET    /raw/{key}                -> text/plain (cacheable for public pastes)
+DELETE /v1/pastes/{key}          (owner only)
+```
+
+## Sizing the key space
+
+With 1 million pastes per day kept for years, the service might hold a few billion pastes. Eight base-62 characters give about 218 trillion keys — tens of thousands of times more than needed — so random unlisted keys are practically unguessable, while public pastes can use shorter keys for convenience.
+
+## Evaluation
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Low-latency reads | CDN caching of immutable public pastes; metadata cache for the rest |
+| Durability until expiry | Object store with replication; metadata written only after content is stored |
+| Unguessable links | Longer random keys for unlisted pastes; rate limiting on reads |
+| Expiration | Read-time checks plus lifecycle rules and background cleanup |
+| Burn after reading | Atomic first-read transition; never cached |
+
+<Ponder question="The service writes content to the object store first and metadata second. What happens if the service crashes between the two writes, and why is that order better than the reverse?">
+With content first, a crash leaves an orphaned object that no metadata points to — invisible to users and removable by a periodic cleanup job. With metadata first, a crash would leave a visible paste whose content does not exist, so readers would get errors. Writing the "commit record" (metadata) last is the same pattern used by blob stores and multipart uploads.
+</Ponder>
+
 <KeyTakeaways>
 - A paste service maps keys to potentially large content, so content and metadata are stored separately.
 - Metadata lives in a database; content lives in an object store; keys come from a pre-generated pool.
 - Immutable public pastes are cached at the CDN, making popular pastes cheap to serve.
 - Expiration combines read-time checks with background deletion or object-store lifecycle rules.
 - Burn-after-reading needs an atomic first-read transition and must bypass caches.
+- Writing content before metadata means a crash leaves only an invisible orphan, never a broken paste.
 </KeyTakeaways>

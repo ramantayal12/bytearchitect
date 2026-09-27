@@ -51,10 +51,19 @@ Out of scope: voice mode, image generation, third-party tool plugins and model t
 The estimates show that compute, not storage or bandwidth, dominates. Design decisions such as batching, caching, model routing and limits on context length are really decisions about GPU cost.
 </Callout>
 
+## What one GPU server costs per response
+
+If an inference server costs on the order of tens of dollars per hour and generates 5,000 output tokens per second, a 400-token response uses about 0.08 server-seconds of decode time — a fraction of a cent, plus prefill. Multiplied by a billion messages a day, small percentage gains (a longer cache hit, a smaller model for easy questions, a shorter system prompt) translate into very large savings, which is why the design keeps returning to efficiency.
+
+<Ponder question="The average input is 2,000 tokens but the average output is only 400. Why do long conversations still matter so much for cost and latency?">
+Every turn resends the conversation history as input, so input tokens grow with conversation length, and prefill work and KV-cache memory grow with them. Long contexts raise time to first token, reduce how many requests fit on a GPU at once, and cost more per turn. Prefix caching, summarizing old turns and trimming irrelevant history keep long conversations affordable.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are streamed chat with history, conversation management, attachments, regeneration and feedback, across tiers.
 - Key non-functional goals are fast time to first token, smooth streaming, availability, safety, privacy and cost efficiency.
 - Estimates reach about 14 million output tokens per second at peak, requiring thousands of GPU servers.
 - Input tokens from history are large; caching shared prefixes saves significant compute.
 - Compute dominates cost, so efficiency techniques are central to the design.
+- Tiny per-response efficiency gains add up to large savings at a billion messages per day.
 </KeyTakeaways>

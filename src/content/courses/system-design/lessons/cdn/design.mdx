@@ -70,6 +70,44 @@ flowchart LR
 </Slide>
 </Slides>
 
+A special case is the **origin shield**: a single designated parent PoP through which *all* misses for a customer flow. It maximizes the chance that a miss is satisfied before reaching the origin, at the cost of an extra hop for some edges. Customers with fragile or expensive origins enable it.
+
+### How much does the hierarchy save?
+
+Suppose 300 edge PoPs, grouped under 10 regional parents, and a new video that becomes popular everywhere at once:
+
+| Setup | Origin fetches for the first copy |
+| --- | --- |
+| Edges only | Up to 300 (one per PoP), more without coalescing |
+| Edges plus 10 parents | 10 |
+| Edges, parents and an origin shield | 1 |
+
+## Inside a PoP
+
+```mermaid
+flowchart LR
+  I["Internet"] --> R["Routers<br/>(anycast VIP)"]
+  R --> L4["L4 load balancers"]
+  L4 --> S1["Edge server 1<br/>RAM + SSD cache"]
+  L4 --> S2["Edge server 2<br/>RAM + SSD cache"]
+  L4 --> S3["Edge server 3<br/>RAM + SSD cache"]
+  S1 & S2 & S3 --> UP["Upstream: parent PoP or origin"]
+```
+
+A PoP is a small data center: routers announce the CDN's addresses, load balancers spread connections across edge servers, and each edge server caches in RAM (hottest objects) and on SSDs (everything else). Servers inside a PoP split the cache between them by hashing on the cache key, as the next lesson explains. A typical edge server might hold tens of terabytes on SSD and serve tens of gigabits per second.
+
+## The distribution system
+
+Content owners push new objects and configuration (TTLs, cache-key rules, purges) to thousands of edge servers. Sending everything from one place would create a bottleneck, so the distribution system uses a **tree**: the origin or a control plane sends to regional distribution nodes, which forward to PoPs, which forward to their servers. Each layer fans out to many recipients, so an update reaches the whole fleet in a few hops, typically within seconds.
+
+## Accounting and monitoring
+
+Every edge server writes access logs: URL, bytes, status, cache result, client region and latency. Logs are aggregated in a streaming pipeline to produce:
+
+- **Billing** — bytes and requests per customer.
+- **Analytics** — hit ratios, top URLs, traffic by country.
+- **Operations** — error rates and latency per PoP, which feed back into the routing system so that unhealthy or overloaded PoPs receive less traffic.
+
 ## API between components
 
 Edges and origins communicate over HTTP, and the CDN exposes management APIs to content owners:
@@ -79,6 +117,7 @@ retrieveContent(url)             edge → parent/origin, on a miss
 deliverContent(url, clientInfo)  edge → client
 purge(urlPattern)                owner → CDN, invalidate content
 prefetch(urls)                   owner → CDN, warm caches (push)
+getStats(timeRange, filters)     owner → CDN, usage and hit ratios
 ```
 
 ## Why this design meets the requirements
@@ -88,9 +127,15 @@ prefetch(urls)                   owner → CDN, warm caches (push)
 - **Scalability:** capacity grows by adding servers and PoPs; the hierarchy keeps origin load flat as edges multiply.
 - **Security:** scrubbers and massive distributed capacity absorb attacks.
 
+<Ponder question="Why might a CDN route misses from its Sydney edge to a parent in Singapore rather than directly to an origin in Virginia, even though it adds a hop?">
+The Singapore parent aggregates misses from many Asia-Pacific PoPs, so it is much more likely to have the object already — turning a 200 ms trans-Pacific fetch into a much shorter regional one for most misses, and protecting the origin. The CDN's backbone between Sydney and Singapore is also typically faster and more reliable than the public Internet path to the origin.
+</Ponder>
+
 <KeyTakeaways>
 - A CDN combines routing, scrubbers, edge servers, parent caches, distribution, origin and monitoring components.
 - Requests are routed to a nearby healthy edge; misses go to a parent cache, then the origin.
-- Hierarchical caching means the origin sees roughly one request per region for popular content.
-- Management APIs let content owners purge and prefetch content.
+- Hierarchical caching and origin shields mean the origin sees roughly one request per region, or even one in total, for popular content.
+- A PoP is a small data center with routers, load balancers and edge servers caching in RAM and SSD.
+- Distribution trees push content and configuration quickly; logs feed billing, analytics and routing.
+- Management APIs let content owners purge, prefetch and inspect their traffic.
 </KeyTakeaways>

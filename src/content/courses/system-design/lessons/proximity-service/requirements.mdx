@@ -53,6 +53,10 @@ If one location-service server with an in-memory index handles about 2,000 queri
 - If the radius contains too few results, the client can widen it, or the service can expand the search automatically.
 - Ranking combines distance with relevance signals such as rating, number of reviews and whether the business is open.
 
+<Ponder question="The index fits on one machine. Why deploy about ten or more servers instead of one large one?">
+Throughput and availability. One server cannot serve 20,000 searches per second with room to spare, and a single server is a single point of failure. Because the index is small and read-only between refreshes, the cheapest way to scale is to replicate it everywhere — every additional replica adds query capacity and resilience, and replicas in several regions cut network latency for users far from the primary region.
+</Ponder>
+
 <KeyTakeaways>
 - Core features are nearby search with filters, business details, business management and reviews.
 - The workload is overwhelmingly read-heavy: thousands of searches per second versus dozens of updates.

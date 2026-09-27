@@ -44,6 +44,10 @@ flowchart LR
 When asked to design a proximity service, get to the indexing question quickly. Interviewers want to hear why a plain latitude and longitude index fails and how a geohash or quadtree solves it.
 </Callout>
 
+<Ponder question="Why is 'find nearby drivers' a harder variant of the proximity problem than 'find nearby restaurants'?">
+Restaurants almost never move, so their index can be built offline and refreshed every few minutes. Drivers move constantly and report their position every few seconds, so the index must absorb hundreds of thousands of location updates per second while staying queryable, and a result that is even 30 seconds stale may be wrong. That shifts the design towards in-memory, frequently updated indexes sharded by region — the approach in the ride-hailing chapter.
+</Ponder>
+
 <KeyTakeaways>
 - A proximity service answers "what is near this point?" for discovery, ride-hailing and social apps.
 - Separate B-tree indexes on latitude and longitude cannot efficiently answer 2D range queries.

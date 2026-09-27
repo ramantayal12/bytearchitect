@@ -63,10 +63,28 @@ Short links hide their destination, which attackers exploit for phishing and mal
 Interviewers often ask, "What happens if the key generation service goes down?" A good answer: application servers hold batches of keys in memory, so creation continues for a while; the key service itself is replicated; and redirects do not depend on it at all.
 </Callout>
 
+## Latency budget for a redirect
+
+| Step | Cache hit | Cache miss |
+| --- | --- | --- |
+| Network to the nearest region | 20–60 ms | 20–60 ms |
+| Load balancer and redirect server | 1 ms | 1 ms |
+| In-process or distributed cache lookup | 0.5 ms | 0.5 ms (miss) |
+| Key-value store read | — | 2–5 ms |
+| Emit click event (asynchronous) | ~0 on the request path | ~0 |
+| **Server-side total** | **~2 ms** | **~7 ms** |
+
+Network distance, not server work, dominates — which is why regional deployment matters more than further server optimization.
+
+<Ponder question="An attacker enumerates random 7-character keys at 50,000 requests per second to discover private links. How does the design limit this?">
+The key space is 3.5 trillion and only about 12 billion keys are in use, so a random guess hits a real link about 0.3% of the time — still too often for sensitive links. Rate limiting redirects per IP and per network makes large-scale enumeration slow; monitoring for high miss rates (many 404s from one source) flags and blocks scanners; and links meant to be private should use longer keys or require authentication rather than relying on obscurity.
+</Ponder>
+
 <KeyTakeaways>
 - Redirects stay available and fast through multi-region stateless servers, a replicated store and layered caches.
 - Hot links are handled with replicated cache entries, in-process caches and optional CDN caching.
 - Expiration combines lazy checks at redirect time with background cleanup.
 - Click analytics flow through a stream and are aggregated asynchronously.
 - Abuse prevention includes URL scanning, rate limiting, warnings, takedowns and loop detection.
+- Redirect latency is dominated by network distance; the server work is a few milliseconds.
 </KeyTakeaways>

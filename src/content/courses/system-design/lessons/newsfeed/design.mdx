@@ -1,38 +1,32 @@
 ---
-title: 'System Design: Newsfeed'
+title: Design of a Newsfeed System
 ---
 
-A newsfeed is the scrolling list of posts, photos, links and updates a social network shows on its home screen. It generalizes the microblogging timeline in two ways: content comes from many kinds of sources (friends, pages, groups and recommended content), and it is **ranked** by predicted interest rather than shown strictly by time. This lesson covers the requirements and high-level design; the next lesson dives into fan-out and ranking.
-
-## Requirements
-
-**Functional:**
-
-- Users see a feed of posts from friends, followed pages and groups, plus some recommended content.
-- The feed is ranked by relevance, with fresh content favored.
-- Users can scroll indefinitely, and new posts appear when they refresh.
-- Users can post content that appears in their friends' feeds.
-
-**Non-functional:**
-
-- **Low latency:** the first page of the feed should render in well under a second.
-- **High availability:** an empty feed is a broken product.
-- **Eventual consistency:** a new post may take a few seconds to reach friends.
-- **Scalability:** billions of users, each with hundreds of friends and followed pages.
-
-## Estimates
-
-With 1 billion daily active users, each loading the feed 10 times per day, the service handles 10 billion feed requests per day, about 115,000 per second on average and several hundred thousand at peak. If users create 500 million posts per day and each has an average audience of 300 people, pushing to all would mean 150 billion feed inserts per day. Precomputing feeds for every user is expensive, which pushes the design towards candidate retrieval plus ranking at read time.
+With requirements and estimates in place, this lesson defines the API and data model and lays out the feed generation pipeline — the **API** and **Layout** steps of SCALED. The next lesson goes deep on fan-out and ranking.
 
 ## API
 
 ```http
-GET  /v1/feed?cursor=...&count=20   -> { items: [ { postId, author, content, reason } ], nextCursor }
-POST /v1/posts                      { content, audience }
-POST /v1/feed/events                [ { postId, type: impression | click | like | hide, ts } ]
+GET  /v1/feed?cursor=...&count=20&mode=ranked|chronological
+     -> { items: [ { postId, author, content, reason } ], nextCursor }
+POST /v1/posts                      { content, mediaIds?, audience }
+DELETE /v1/posts/{id}
+POST /v1/posts/{id}/reactions       { type }
+POST /v1/feed/events                [ { postId, type: impression | click | like | hide, dwellMs, ts } ]
 ```
 
-The feed events endpoint collects implicit feedback, such as impressions, dwell time and hides, that trains the ranking models.
+The feed events endpoint collects implicit feedback, such as impressions, dwell time and hides, that trains the ranking models. Events are batched on the client and sent every few seconds.
+
+## Data model
+
+| Data | Store | Key | Notes |
+| --- | --- | --- | --- |
+| Posts | Sharded key-value or wide-column store + post cache | post_id | Author, content, media references, audience, created_at, deleted flag |
+| Author posts index | Wide-column store | (author_id, post_id DESC) | "Recent posts by this source", used for pulling |
+| Social graph | Graph or sharded edge store | user_id | Friends, follows, group memberships, blocks |
+| Feed inbox | In-memory store, sharded by user | user_id | Bounded list of (post_id, author_id, created_at) |
+| Features | Feature store (online key-value + offline warehouse) | user_id, post_id, (user_id, author_id) | Affinity, interests, engagement velocity |
+| Seen items and session rankings | In-memory store with TTL | (user_id, session) | For pagination and refresh deduplication |
 
 ## High-level design
 
@@ -87,17 +81,50 @@ Key components:
 - **Post service and store:** the source of truth for posts, with a hot cache.
 - **Social graph service:** friends, follows and group memberships.
 - **Feature store:** precomputed features such as user–author affinity, per-post engagement velocity and user interests, updated by streaming and batch pipelines.
-- **Ranking service:** runs machine-learned models to score candidates.
+- **Ranking service:** runs machine-learned models to score candidates, usually on a dedicated fleet (often with accelerators) separate from the feed service.
 - **Event pipeline:** collects impressions and interactions to update features and train models.
+
+## Publishing a post
+
+```mermaid
+sequenceDiagram
+  participant A as Author
+  participant P as Post service
+  participant S as Post store
+  participant E as Post events
+  participant F as Fan-out workers
+  participant I as Inboxes
+  A->>P: POST /posts (audience: friends)
+  P->>S: store post with time-sortable ID
+  P-->>A: 201 Created
+  P->>E: post created (author, audience)
+  E->>F: consume
+  F->>F: audience small → push to active friends
+  F->>I: prepend post ID to each inbox
+```
+
+The author gets an immediate acknowledgment; delivery is asynchronous. Pages and creators with very large audiences skip the push step and are pulled at read time, as the deep-dive lesson explains.
+
+## Reading the feed
+
+1. The feed service reads the user's inbox (a few hundred IDs), asks the graph service which high-audience sources the user follows and fetches their recent posts from the author posts index, and asks the recommendation service for a batch of suggested posts.
+2. It removes candidates the user has already seen in recent sessions.
+3. It fetches features for the remaining candidates in batches and calls the ranking service.
+4. It applies rules — diversity, integrity, ad slots — hydrates the top items from the post cache and checks each against current deletion and privacy state.
+5. It stores the ranked list for the session and returns the first page with a cursor.
 
 ## Pagination and freshness
 
 Because ranking reorders content, a cursor cannot simply be "posts older than X." Instead, the feed service stores the ranked list generated for the session, perhaps a few hundred items, and the cursor indexes into it. When the user refreshes, a new ranking runs and items already seen are filtered out, so new posts appear at the top without duplicating old ones.
 
+<Ponder question="A user's friend deletes a post seconds after it was fanned out to 300 inboxes. How does the design make sure nobody sees it?">
+The inboxes still contain the post ID, but step 4 hydrates every candidate from the post store (or its cache) and drops posts marked deleted or no longer visible to this viewer. Deletion therefore takes effect on the next read everywhere, without touching 300 inboxes; the stale IDs simply age out. The post cache must be invalidated on delete so hydration sees the change immediately.
+</Ponder>
+
 <KeyTakeaways>
-- A newsfeed mixes content from friends, pages, groups and recommendations, ranked by predicted interest.
+- The API serves ranked or chronological pages, accepts posts with audiences and collects interaction events.
+- Posts are stored once; inboxes hold bounded ID lists; features live in an online feature store.
 - Feed generation is a pipeline: candidate retrieval, feature fetching, model ranking and business rules.
-- Pushed inboxes, pulled high-follower sources and recommendations supply candidates.
-- Implicit feedback such as impressions, clicks and hides flows back into features and model training.
-- Ranked feeds are paginated from a stored session ranking, and refreshes filter already seen items.
+- Publishing acknowledges immediately and fans out asynchronously to active users' inboxes.
+- Integrity is enforced at hydration time, and ranked feeds are paginated from a stored session ranking.
 </KeyTakeaways>

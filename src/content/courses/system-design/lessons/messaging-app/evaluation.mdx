@@ -50,10 +50,28 @@ flowchart LR
 When evaluating, walk through one message end to end under failure: "Alice sends, the gateway crashes before acknowledging, Alice's app retries on a new gateway with the same ID, the server deduplicates, and Bob sees the message once."
 </Callout>
 
+## Latency budget for an online-to-online message
+
+| Step | Budget |
+| --- | --- |
+| Alice's phone to her gateway (mobile network) | 50–100 ms |
+| Gateway to message service, sequence assignment | 5 ms |
+| Durable write to Bob's inbox (replicated) | 10 ms |
+| Session directory lookup and push to Bob's gateway | 5 ms |
+| Bob's gateway to Bob's phone | 50–100 ms |
+| **Total** | **~120–220 ms** |
+
+The mobile network hops on both ends dominate; the server-side path is about 20 ms.
+
+<Ponder question="A deployment restarts 500 gateways at once, disconnecting 50 million devices. What goes wrong, and how should deployments be done instead?">
+Fifty million devices reconnect and sync simultaneously — a thundering herd that overloads authentication, the session directory and inbox reads, and may cascade into further failures. Deploy gradually: drain a few gateways at a time, have them tell connected clients to reconnect elsewhere with randomized delays, and let clients use jittered exponential backoff so reconnects spread over minutes rather than seconds.
+</Ponder>
+
 <KeyTakeaways>
 - Durable inboxes, retries and deduplication give reliable, exactly-once display over unreliable networks.
 - Gateway failures cause reconnects that must be spread out with randomized backoff and gradual draining.
 - Correctness never relies on the session directory being perfectly accurate; inboxes and push are the fallback.
 - Key trade-offs are privacy versus server-side history, fan-out cost for groups and presence accuracy versus cost.
 - Metadata-based abuse detection is necessary because content is end-to-end encrypted.
+- An online-to-online message spends most of its ~200 ms on mobile network hops; the server path is about 20 ms.
 </KeyTakeaways>

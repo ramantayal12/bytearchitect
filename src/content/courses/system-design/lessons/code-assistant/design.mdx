@@ -91,10 +91,37 @@ Chat questions like "where is the retry logic for payments?" need knowledge beyo
 
 If the completion service is slow or unavailable, the plugin simply shows nothing; the editor never blocks. Rate limits protect against runaway clients. Telemetry on acceptance rates and latency per model version drives canary rollouts of new models, which must beat the current version on both quality and speed before replacing it.
 
+## Latency budget for a completion
+
+| Step | Budget |
+| --- | --- |
+| Debounce after the last keystroke | 50–75 ms |
+| Build context locally in the plugin | 10–20 ms |
+| Network to nearest region (persistent connection) | 20–50 ms |
+| Queue and prefill of ~1,500 tokens (with prefix reuse) | 40–80 ms |
+| Generate ~30 tokens | 30–60 ms |
+| Post-process and render ghost text | under 10 ms |
+| **Total after the pause** | **~150–300 ms** |
+
+## Evaluating the design
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Completion latency | Debounce and cancel, local context, nearby regions, small models, prefix caching |
+| Relevance | Fill-in-the-middle, ranked snippets from related files, repository retrieval for chat |
+| Privacy | Client-side exclusions, minimal retention, per-organization indexes and keys |
+| Availability | Silent degradation; editor never blocks |
+| Cost | Small models for completions, cancellation of stale requests, local caching |
+
+<Ponder question="Roughly how many completion requests are cancelled before they finish, and why does handling cancellation on the server matter so much?">
+Many — developers often keep typing after a pause, so a large fraction of requests become stale before their result is shown. If the server kept generating for cancelled requests, a substantial share of GPU capacity would be spent on output nobody sees. Propagating cancellation to the inference server frees batch slots immediately, which directly lowers the fleet size and cost needed for the same number of useful suggestions.
+</Ponder>
+
 <KeyTakeaways>
 - Completions are optimized end to end: debouncing, cancellation, local caching, local context building and nearby regions.
 - Fill-in-the-middle prompts with carefully budgeted snippets from open files make suggestions relevant.
 - Small, dedicated models on latency-optimized GPU pools serve completions; larger models serve chat and edits.
 - Chat uses an incremental, per-organization code index with structural chunks, symbols and embeddings.
 - Privacy controls include minimal retention, per-tenant isolation and client-side exclusion of sensitive files; failures degrade silently.
+- A completion fits in roughly 150–300 ms after the typing pause when every step is minimized.
 </KeyTakeaways>

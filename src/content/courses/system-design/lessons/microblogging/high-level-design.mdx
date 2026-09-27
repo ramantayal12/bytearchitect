@@ -102,10 +102,49 @@ The timeline service reads the user's list of post IDs from the timeline cache, 
 
 If a user's timeline is missing from the cache, for example after a long absence, the service rebuilds it by pulling recent posts from each followee's user timeline and merging them. This is slow, but it happens rarely.
 
+## The home timeline read, step by step
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant T as Timeline service
+  participant H as Home timeline cache
+  participant CEL as Celebrity post cache
+  participant P as Post cache
+  participant U as User and counts caches
+  C->>T: GET /timeline/home
+  T->>H: read post IDs for user (latest 800)
+  T->>CEL: recent posts of followed celebrities
+  T->>T: merge by post ID (time-sortable), take 20
+  T->>P: multiGet 20 posts
+  T->>U: multiGet authors and like counts
+  T->>T: drop deleted, blocked, muted
+  T-->>C: 20 hydrated posts + cursor
+```
+
+Every step is a batched lookup in an in-memory store, so the whole read takes tens of milliseconds even though it touches several services.
+
+## Timeline cache operations
+
+In a Redis-like store, each home timeline is a list keyed by user:
+
+```text
+LPUSH  home:42  1837465520112 ...     # fan-out prepends new post IDs
+LTRIM  home:42  0 799                 # keep only the newest 800
+LRANGE home:42  0 19                  # first page
+```
+
+Deleting a post does not require removing its ID from millions of lists: hydration drops IDs whose post is marked deleted. The stale IDs age out of the lists naturally.
+
+<Ponder question="A user unfollows an account. Should the fan-out service remove that account's posts from the user's cached timeline?">
+It can, but it does not have to. The simplest approach filters at read time: during hydration, the timeline service drops posts from authors the user no longer follows (it already filters blocked and muted accounts). Old posts from the unfollowed account disappear from view immediately and age out of the cached list over time, avoiding a scan-and-delete over the list.
+</Ponder>
+
 <KeyTakeaways>
 - Posts are stored once with time-sortable IDs; home timelines hold only post ID lists in memory.
 - The social graph is stored with both follower and followee indexes.
 - Publishing a post acknowledges quickly, then events drive fan-out, indexing, trends and notifications asynchronously.
 - Fan-out skips inactive users, whose timelines are rebuilt on demand.
 - Reading a timeline merges cached IDs with celebrity posts, hydrates them in batches and filters deleted or blocked content.
+- A timeline read is a handful of batched in-memory lookups; deletions and unfollows are handled by filtering at read time.
 </KeyTakeaways>

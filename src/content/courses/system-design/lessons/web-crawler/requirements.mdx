@@ -60,10 +60,19 @@ Scope decisions to clarify with the interviewer:
 DNS lookups become a bottleneck at this scale. A crawler resolves millions of hostnames, and standard resolvers are slow and often synchronous. Crawlers run their own caching DNS resolvers.
 </Callout>
 
+## The frontier's size
+
+If the crawler knows about 100 billion URLs (discovered links far outnumber crawled pages) and stores about 100 bytes per URL in the frontier — the URL, a priority and scheduling data — the frontier holds about **10 TB**. It cannot live in memory; it lives on disk, partitioned across nodes, with in-memory buffers for the URLs about to be fetched.
+
+<Ponder question="Why is fetching I/O-bound rather than CPU-bound, and what does that imply for how workers are built?">
+Most of a fetch's 500 ms is spent waiting — for DNS, TCP and TLS handshakes, and the remote server — while parsing 100 KB of HTML takes only milliseconds of CPU. A thread per fetch would waste memory on thousands of mostly idle threads, so workers use asynchronous I/O (an event loop) to keep hundreds or thousands of fetches in flight per machine, with a small pool of threads for parsing.
+</Ponder>
+
 <KeyTakeaways>
 - A crawler loops: take a URL from the frontier, fetch, parse, store content and add new links to the frontier.
 - Functional scope includes crawling, storing, link extraction, recrawling and obeying robots.txt.
 - Politeness, robustness and scalability are the defining non-functional requirements.
 - 15 billion pages per month means about 5,800 pages per second, around 4.6 Gbps and hundreds of terabytes of compressed HTML per month.
 - Fetching is I/O-bound, so asynchronous workers and a caching DNS resolver are essential.
+- The frontier of known-but-uncrawled URLs is terabytes in size and lives on disk, partitioned by host.
 </KeyTakeaways>

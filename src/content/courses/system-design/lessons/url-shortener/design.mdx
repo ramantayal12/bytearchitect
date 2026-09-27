@@ -107,10 +107,60 @@ flowchart LR
 
 The redirect service looks up the key in the cache, falling back to the store on a miss. It checks expiry, returns the redirect and asynchronously emits a click event for analytics, so analytics never slows down redirects.
 
+## Base-62 encoding, worked through
+
+Encoding repeatedly divides by 62 and maps remainders to characters `0–9`, `a–z`, `A–Z`:
+
+```python
+ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+def encode(n: int) -> str:
+    if n == 0:
+        return ALPHABET[0]
+    chars = []
+    while n > 0:
+        n, r = divmod(n, 62)
+        chars.append(ALPHABET[r])
+    return "".join(reversed(chars)).rjust(7, "0")   # pad to a fixed length
+
+def decode(s: str) -> int:
+    n = 0
+    for c in s:
+        n = n * 62 + ALPHABET.index(c)
+    return n
+```
+
+For example, `encode(125)`: 125 = 2 × 62 + 1, so the digits are `2` and `1` → `"21"`, padded to `"0000021"`. Seven characters cover every ID below 62⁷ ≈ 3.5 trillion.
+
+## Creating a link, step by step
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant A as App server
+  participant R as Rate limiter
+  participant S as Safety check
+  participant KV as Key-value store
+  C->>A: POST /v1/links { longUrl }
+  A->>R: allowed for this API key?
+  R-->>A: yes
+  A->>S: is longUrl malicious?
+  S-->>A: clean
+  A->>A: pop key from local batch (e.g. aZ3kP9x)
+  A->>KV: PUT aZ3kP9x → longUrl (if absent)
+  KV-->>A: ok
+  A-->>C: { shortUrl: https://sho.rt/aZ3kP9x }
+```
+
+<Ponder question="Two users request the custom alias 'launch' at the same moment. How does the design guarantee only one gets it?">
+Both requests perform a **conditional write** — insert `launch → url` only if the key does not exist — in the key-value store, which serializes writes to the same key on the partition that owns it. One succeeds; the other receives a conflict and is told the alias is taken. Checking availability first and then writing would leave a race window between the check and the write.
+</Ponder>
+
 <KeyTakeaways>
 - A 301 reduces load but hides repeat clicks; a 302 routes every click through the service for analytics.
 - A key-value store partitioned by key fits the simple, key-based access pattern.
 - Hashing URLs risks collisions that need checks; counters need a range allocator and scrambling to avoid predictable keys.
 - A pre-generated key service hands out batches of unique random keys, avoiding collisions and coordination per request.
 - The redirect path is cache-first, and click analytics are emitted asynchronously.
+- Base-62 encoding maps integers to compact keys; seven characters cover about 3.5 trillion IDs.
 </KeyTakeaways>

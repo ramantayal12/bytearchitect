@@ -49,9 +49,24 @@ A Q&A platform lives or dies on content quality. Several mechanisms plug into th
 
 At another order of magnitude, the hottest risks are the feed service's storage and fan-out cost, and the ranking pipeline's feature computation. Both would likely move to more specialized infrastructure, such as a dedicated feed store and an online feature store shared with other recommendation systems.
 
+## Latency budget for a question page
+
+| Reader | Path | Typical latency |
+| --- | --- | --- |
+| Anonymous, popular question | CDN edge cache hit | 20–50 ms |
+| Anonymous, long-tail question | Edge miss → page renderer → question cache or shard | 150–300 ms |
+| Signed-in member | Cached page + personalized fragment (votes, follow state) | 100–200 ms |
+
+The long tail is the slowest path, so the renderer caches question data in memory, and old pages can be pre-rendered in the background when a search engine starts sending traffic to them.
+
+<Ponder question="The feed service is down for 20 minutes. What should signed-in users see, and why does the design make that possible?">
+They should still get a useful home page — for example, a trending or topic-based feed from a cache — and every question page should work normally. That is possible because the feed is an enhancement built from the event stream into its own store, not a dependency of the question page. When the feed service recovers, the feed builder catches up from the retained event stream.
+</Ponder>
+
 <KeyTakeaways>
 - The final design meets availability and latency needs through multi-region stateless services, edge-cached pages and precomputed feeds.
 - Key trade-offs are page freshness versus cache efficiency, fan-out cost versus read speed, and lagging vote counts.
 - Graceful degradation keeps the core question page working when personalization, search or counts fail.
 - Abuse controls such as rate limiting, vote-ring detection and classifiers consume the event stream asynchronously.
+- The long-tail question page is the slowest path and benefits from background pre-rendering.
 </KeyTakeaways>

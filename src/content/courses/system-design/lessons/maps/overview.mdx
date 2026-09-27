@@ -44,6 +44,10 @@ The lessons follow SCALED: requirements and estimates, a high-level design, the 
 In a maps interview, the graph problem is the heart of the discussion. Expect to explain why a plain Dijkstra search is too slow for continent-scale graphs, and how partitioning the graph and precomputing shortcuts fix it.
 </Callout>
 
+<Ponder question="The map, place search and routing all use 'the map', yet the chapter treats them as separate systems. Why?">
+They have completely different workloads. Tiles are static, identical for everyone and perfectly cacheable, so they are a CDN problem. Routing is CPU- and memory-heavy computation on a graph for each request. Traffic is a high-volume streaming write problem. Sharing one architecture would force the worst trade-offs of each onto all three; separating them lets each scale and fail independently while sharing the same source map data.
+</Ponder>
+
 <KeyTakeaways>
 - A maps service combines map data, tile serving, place search, routing and live traffic.
 - The road graph is enormous, so interactive routing requires more than a plain shortest-path search.

@@ -90,10 +90,28 @@ For serving, the trie can be **serialized into a flat array** with offsets inste
 If asked "what if the trie does not fit on one machine?", describe partitioning by prefix range, or switching to a prefix-to-list key-value store, then discuss hot spots for popular first letters.
 </Callout>
 
+## How much memory do top-k lists cost?
+
+Suppose 100 million queries produce about 500 million trie nodes before compression, reduced to about 150 million nodes with radix compression.
+
+```text
+Top-k lists: 150M nodes × 10 references × 4 bytes  ≈ 6 GB
+Node structure (children offsets, labels)          ≈ 3–6 GB
+String table (each query stored once)              ≈ 3 GB
+Total                                              ≈ 12–15 GB per language-region trie
+```
+
+Storing full strings in every list instead of 4-byte references would add roughly 150M × 10 × 30 bytes ≈ 45 GB — three times the whole structure. References are what make precomputation affordable.
+
+<Ponder question="Many nodes deep in the trie have only one or two completions below them. Do they need their own top-k lists?">
+Not necessarily. A common optimization stores precomputed lists only for nodes up to a certain depth or with more than k completions; for smaller subtrees, the server can compute the answer at request time by walking the few completions below, which is cheap precisely because the subtree is tiny. This saves a large amount of memory for the long tail at negligible latency cost.
+</Ponder>
+
 <KeyTakeaways>
 - A trie stores queries by shared prefixes; each node corresponds to a prefix.
 - Searching a subtree per request is too slow for short, popular prefixes.
 - Precomputing the top k completions at every node makes lookups proportional to prefix length only.
 - Top-k lists are built bottom up in one traversal and store references rather than strings.
 - Radix compression and flat serialized arrays keep the trie small and fast to load.
+- With references and radix compression, a trie for 100 million queries with top-10 lists fits in about 12–15 GB.
 </KeyTakeaways>

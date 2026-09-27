@@ -45,6 +45,10 @@ AI assistants are now normal parts of engineering workflows. Using them well mea
 If an interviewer asks you to design an AI feature, treat the model as a slow, expensive, occasionally wrong dependency. Design around it with streaming, caching, fallbacks, evaluation and guardrails, and you will cover most of what they are looking for.
 </Callout>
 
+<Ponder question="In an interview, a candidate proposes 'use an LLM to decide whether each payment is fraudulent' as the core fraud check. What would a strong interviewer probe?">
+Latency and cost per payment (an LLM call may take seconds and cost far more than a small model), determinism and auditability (why was this payment blocked?), behavior when the model is unavailable (fail open or closed?), adversarial robustness (prompt injection through merchant descriptions), and how quality is measured against labeled fraud outcomes. A strong answer uses fast, specialized models and rules on the synchronous path and reserves LLMs for offline investigation or explanations.
+</Ponder>
+
 <KeyTakeaways>
 - New roles such as ML, platform and data engineers work alongside software engineers on AI products.
 - Interviews now include AI-specific design problems and AI components within classic problems.

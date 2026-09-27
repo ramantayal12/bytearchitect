@@ -54,10 +54,44 @@ At-least-once execution is the practical guarantee. To avoid harmful duplicates:
 
 Some workloads are workflows: extract data, then transform it, then load it. A scheduler can support **DAGs** (directed acyclic graphs) of tasks, starting each task only when its dependencies succeed. Workflow engines add durable state for each step so that failures resume from the failed step.
 
+## A retry schedule, concretely
+
+With a base delay of 10 seconds, a factor of 2, a cap of 10 minutes and full jitter:
+
+| Attempt | Maximum delay | Actual delay (random in range) |
+| --- | --- | --- |
+| 1 | 10 s | 0–10 s |
+| 2 | 20 s | 0–20 s |
+| 3 | 40 s | 0–40 s |
+| 4 | 80 s | 0–80 s |
+| 5 | 160 s | 0–160 s |
+| 6 | 320 s | 0–320 s |
+| 7 and later | 600 s (cap) | 0–600 s |
+
+After the configured maximum (say, 8 attempts over roughly half an hour), the task moves to the dead state and alerts its owner.
+
+## A workflow as a DAG
+
+```mermaid
+flowchart LR
+  E1["Extract orders"] --> T["Transform and join"]
+  E2["Extract payments"] --> T
+  T --> L["Load into warehouse"]
+  L --> R1["Refresh dashboards"]
+  L --> R2["Email daily report"]
+```
+
+The two extracts run in parallel; the transform waits for both; the load waits for the transform; the final two steps fan out. If the transform fails, only it (and its descendants) is retried — the completed extracts are not re-run, because the workflow engine persisted their outputs and success.
+
+<Ponder question="At 00:00 UTC, 200,000 recurring tasks become due at once. Workers can start 5,000 tasks per second. What happens, and how would you smooth it?">
+It takes about 40 seconds to start them all, so some start late and executors see a huge spike followed by idleness. Add **jitter** to schedules that do not need exact timing (spread "hourly" tasks across the hour, deterministically per task), give time-critical tasks a higher priority queue so they start first, and pre-scale executors shortly before known peaks.
+</Ponder>
+
 <KeyTakeaways>
 - Priority queues, preemption and deadlines ensure urgent tasks run promptly; aging prevents starvation.
 - Per-tenant quotas and fair queuing prevent one tenant from monopolizing workers.
 - Retries use exponential backoff with jitter, attempt limits and error classification.
 - Resource-aware placement, containers and autoscaling provide efficiency and isolation.
 - Idempotent handlers, idempotency keys and fencing tokens make at-least-once execution safe.
+- Backoff schedules should be capped and randomized; workflow engines retry only the failed steps of a DAG.
 </KeyTakeaways>

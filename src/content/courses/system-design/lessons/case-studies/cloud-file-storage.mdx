@@ -82,10 +82,52 @@ The metadata service is the source of truth and must be strongly consistent: com
 
 Metadata is sharded by user or namespace (a shared folder is its own namespace), keeping each sync operation within one shard. Chunks are immutable, so the blob store needs no coordination beyond durability.
 
+## API
+
+```http
+POST /v1/blocks/missing     { hashes: [...] }                  -> { missing: [...] }
+PUT  /v1/blocks/{hash}      (chunk bytes)
+POST /v1/files/commit       { namespaceId, path, chunkHashes, size, baseVersion } -> { version } | 409 conflict
+GET  /v1/changes?namespaceId=...&cursor=...                    -> { entries: [...], cursor, hasMore }
+GET  /v1/blocks/{hash}                                         -> chunk bytes (via CDN or presigned URL)
+POST /v1/shares             { namespaceId, path, email, role }
+```
+
+## Metadata model
+
+| Table | Key | Fields |
+| --- | --- | --- |
+| namespaces | namespace_id | owner, type (user root or shared folder), members and roles |
+| file_versions | (namespace_id, path, version) | chunk hash list, size, modified_at, device, deleted flag |
+| change_log | (namespace_id, seq) | path, version, operation — the feed that cursors read |
+| chunk_refs | chunk_hash | reference count, storage location |
+
+The change log is ordered per namespace, so a device's cursor is just "the last sequence number I applied" for each namespace it belongs to.
+
+## How much does chunking save?
+
+A 200 MB presentation where the user edits one slide changes perhaps two 4 MB chunks. With chunking the client uploads 8 MB instead of 200 MB — a 25× saving — and other devices download the same 8 MB. Across millions of daily edits of large files, this is the difference between a bandwidth bill measured in petabytes and one measured in terabytes. Deduplication adds further savings for common files: an installer shared by thousands of users is stored once.
+
+## Evaluation
+
+| Requirement | How the design meets it |
+| --- | --- |
+| Durability | Chunks in a replicated or erasure-coded blob store; metadata in a replicated, strongly consistent database |
+| Consistent file tree | Optimistic concurrency on commits; ordered per-namespace change log |
+| Bandwidth efficiency | Content-defined chunking, delta sync, deduplication, compression |
+| Offline support | Local database of file states; commits and conflicted copies on reconnect |
+| Scale | Metadata sharded by namespace; immutable chunks scale in the blob store |
+
+<Ponder question="Cross-user deduplication means that if a chunk already exists, the client does not need to upload it. What security risk does this create, and how can it be mitigated?">
+A client that asks "do you already have chunk X?" can learn whether *anyone* has stored a file with that content — for example, confirming that a specific confidential document exists in the system. Mitigations include deduplicating only within a user or organization, requiring the client to upload (or prove possession of) the data before it is linked, and never revealing existence directly through the upload protocol.
+</Ponder>
+
 <KeyTakeaways>
 - Content-hashed chunks enable delta sync, deduplication, resumable and parallel transfers.
 - A block service stores immutable chunks; a strongly consistent metadata service stores file versions as chunk lists.
 - Clients upload only missing chunks, commit versions and notify other devices, which fetch changes since their cursor.
 - Optimistic concurrency detects conflicting edits; conflicted copies ensure no work is lost.
 - Metadata is sharded by user or shared namespace so sync operations stay on one shard.
+- An ordered per-namespace change log lets devices sync by cursor; chunking can cut transfers by more than an order of magnitude.
+- Cross-user deduplication must not reveal whether others have stored a given file.
 </KeyTakeaways>

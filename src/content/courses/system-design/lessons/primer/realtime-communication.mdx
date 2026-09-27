@@ -63,6 +63,21 @@ The client opens an HTTP request, and the server responds with a stream of text 
 - **Graceful draining** during deployments asks clients to reconnect elsewhere gradually, avoiding reconnection storms.
 - **Resynchronization** after reconnecting fetches missed events using a cursor or last-event ID.
 
+## Choosing, by feature
+
+| Feature | Best fit | Why |
+| --- | --- | --- |
+| Chat and typing indicators | WebSockets | Frequent messages in both directions |
+| Streaming an LLM answer | Server-sent events | One-way stream over plain HTTP |
+| Live sports scores on a web page | Server-sent events | Server-to-client updates, auto-reconnect |
+| Notifications in an app with occasional updates | Long polling or push notifications | Simple, low frequency |
+| Collaborative editing | WebSockets | Bidirectional operations and presence |
+| Dashboard refreshed every minute | Short polling | Simplicity outweighs delay |
+
+<Ponder question="A team uses WebSockets for a live dashboard that only receives updates from the server once every few seconds. Is that a mistake?">
+Not necessarily a mistake, but probably more complexity than needed: WebSockets need connection-aware load balancing, heartbeats and custom reconnection logic. Server-sent events deliver one-way updates over plain HTTP with built-in reconnection and resumption by event ID, and work well through proxies. If the client never needs to send messages over the same channel, SSE is usually the simpler choice.
+</Ponder>
+
 <KeyTakeaways>
 - Short polling is simple but wasteful; long polling achieves near-real-time delivery over plain HTTP.
 - WebSockets provide full-duplex, low-overhead messaging for interactive features.

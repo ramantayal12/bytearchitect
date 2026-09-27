@@ -54,6 +54,26 @@ sequenceDiagram
 - Practice by designing APIs for problems in this course, writing out endpoints, request and response bodies and error cases.
 - In the interview, start with use cases and consumers, then resources, then endpoints, then cross-cutting concerns such as errors, pagination, versioning and security.
 
+## A consistent error body
+
+```json
+{
+  "error": {
+    "code": "card_declined",
+    "message": "The card was declined by the issuer.",
+    "param": "payment_method",
+    "requestId": "req_7f3a2c",
+    "docUrl": "https://docs.example.com/errors#card_declined"
+  }
+}
+```
+
+A machine-readable `code` lets clients handle errors programmatically, the human-readable `message` helps developers debug, and the `requestId` connects a customer's report to server logs.
+
+<Ponder question="Why is offset pagination (`?page=3&size=20`) problematic for a feed of items that changes constantly?">
+When new items are inserted at the top between page requests, everything shifts down: the client sees duplicates on the next page, and deletions make it skip items. Offsets also get slower for deep pages because the database must count past them. A cursor that encodes the position of the last item returned ("items after this ID and timestamp") stays stable as data changes and is efficient at any depth.
+</Ponder>
+
 <KeyTakeaways>
 - System design interviews focus on architecture; API design interviews focus on the developer-facing interface.
 - Core API topics are resource modeling, method semantics, idempotency, pagination, errors, versioning and security.

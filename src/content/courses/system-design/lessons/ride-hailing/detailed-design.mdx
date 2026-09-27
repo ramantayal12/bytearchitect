@@ -70,10 +70,53 @@ Connection gateways maintain persistent connections and register each connection
 
 During a trip, the location service forwards the assigned driver's updates to the rider's gateway. The rider app smooths positions between updates by animating along the route, so the car moves continuously even though updates arrive every few seconds.
 
+## Sizing the live index
+
+```text
+Drivers online in a large city at peak:  200,000
+Per driver: ID (8 B), position (16 B), cell (8 B), status and timestamp (16 B),
+            plus hash map overhead ≈ 150 B
+City index: 200,000 × 150 B ≈ 30 MB
+Updates:    200,000 / 4 s = 50,000 per second for that city
+```
+
+Memory is trivial; the constraint is update throughput per partition. A city of this size is split into a few area partitions so each server handles about 10,000–20,000 updates per second with headroom.
+
+## How location updates flow
+
+```mermaid
+flowchart LR
+  D["Driver app"] -->|"every 4 s"| G["Connection gateway"]
+  G --> S[["Location stream<br/>partitioned by city"]]
+  S --> L["Location service partition<br/>(in-memory index)"]
+  S --> H["Trip location writer<br/>(on-trip drivers only)"]
+  L -->|"assigned driver updates"| N["Notification service"] --> R["Rider's gateway"]
+  H --> TS[("Trip location history")]
+```
+
+Putting a stream between gateways and the location service lets a restarted partition rebuild its index by replaying the last few seconds of updates, and lets other consumers (trip history, analytics, the pricing service's supply counts) read the same updates independently.
+
+## Batch matching, by example
+
+Two riders request within the same second. Greedy matching serves rider 1 first:
+
+| | Driver X | Driver Y |
+| --- | --- | --- |
+| Rider 1 | 2 min | 3 min |
+| Rider 2 | 3 min | 9 min |
+
+Greedy gives rider 1 driver X (2 min) and leaves rider 2 with Y (9 min): 11 minutes of total pickup time. Solving the assignment jointly gives rider 1 driver Y (3 min) and rider 2 driver X (3 min): 6 minutes total. Collecting requests for a second or two and solving a small assignment problem per area improves average wait times noticeably during busy periods.
+
+<Ponder question="A location service partition crashes. What happens to matching in that city, and how quickly does it recover?">
+The standby replica takes over within seconds, holding positions at most a few seconds old; if there is no standby, a new instance rebuilds the index by replaying the last few seconds of the location stream, since every online driver reports again within four seconds. Matching in that city pauses or returns fewer candidates for a few seconds — noticeable only as a slightly slower match — and no trip data is lost because trips live in the durable trip store.
+</Ponder>
+
 <KeyTakeaways>
 - A mutable in-memory index per city maps cells to available drivers, with constant-time updates.
 - The live index is ephemeral and rebuilt from incoming updates; only on-trip locations are stored durably.
 - Candidates are found in rings of cells around the rider and ranked by estimated time to pickup.
 - An atomic compare-and-set reservation with a lease guarantees a driver is offered only one trip at a time.
 - Connection gateways and a session directory push events; critical events fall back to mobile push notifications.
+- A large city's index is only tens of megabytes; update throughput, not memory, drives partitioning.
+- Batch matching over a short window beats greedy matching during busy periods.
 </KeyTakeaways>

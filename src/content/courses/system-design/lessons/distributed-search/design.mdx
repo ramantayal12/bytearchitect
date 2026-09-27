@@ -27,6 +27,10 @@ flowchart LR
 
 Using a durable change stream decouples indexing from the source system: if indexers fall behind or crash, events wait in the stream, and the index can be rebuilt from scratch by replaying events or bulk-exporting the source data.
 
+### Handling out-of-order updates
+
+Two updates to the same video can reach indexers out of order — for example, when a worker retries an old event. Each event carries the source record's **version** (or last-modified timestamp), and the shard ignores an update older than the version it already has. Deletes leave a versioned tombstone for a while so that a late-arriving older update cannot resurrect the document.
+
 ## Query pipeline
 
 <Slides title="Answering a search query">
@@ -68,6 +72,16 @@ flowchart LR
 
 This **scatter-gather** pattern is the standard way to query a document-partitioned index. Because every shard is queried, the slowest shard determines overall latency — so tail latency on each shard matters a great deal.
 
+### Two rounds: query, then fetch
+
+Returning full documents from every shard would waste bandwidth, since most candidates are discarded during the merge. Coordinators therefore often use two rounds: the **query phase** returns only document IDs and scores, and after merging, a **fetch phase** retrieves titles, snippets and other stored fields only for the final page of results.
+
+### Inside one shard: top-k without scoring everything
+
+A query for a common word may match millions of documents in a shard, but only the top few hundred matter. Shards avoid scoring every match with **early termination**: each postings list keeps an upper bound on the score any document in it can contribute. While traversing lists, the shard maintains the current top-k threshold and skips documents whose best possible score cannot beat it. Algorithms of this kind (such as WAND and its block-based variants) often skip most of the postings for common queries.
+
+Filters (language, duration) are applied during traversal using precomputed bitsets or doc-value columns, so filtered-out documents are never scored.
+
 ## Two-phase ranking
 
 Ranking billions of documents with an expensive model is impossible within 100 ms. Systems use two phases:
@@ -75,18 +89,37 @@ Ranking billions of documents with an expensive model is impossible within 100 m
 - **Retrieval and cheap scoring** on each shard (for example, BM25 plus simple signals) selects a few hundred candidates.
 - **Re-ranking** of those candidates with a richer, often machine-learned model that considers personalization and freshness.
 
+```mermaid
+flowchart LR
+  ALL["2 billion documents"] -->|"inverted index + filters"| M["~5 million matches"]
+  M -->|"cheap score, top 200 per shard"| C["~10,000 candidates"]
+  C -->|"merge, top 500"| R["Re-ranker (ML model)"]
+  R --> P["Top 20 shown"]
+```
+
 ## Pagination
 
-Deep pagination (“page 500”) is expensive with scatter-gather, because each shard must return `page × size` results for the coordinator to merge. Systems limit how deep users can page, or use **search-after cursors** that continue from the last result's sort values.
+Deep pagination ("page 500") is expensive with scatter-gather, because each shard must return `page × size` results for the coordinator to merge. Systems limit how deep users can page, or use **search-after cursors** that continue from the last result's sort values.
+
+```text
+Page 500, 20 per page, 50 shards:
+each shard returns 10,000 results → coordinator merges 500,000 to show 20
+Cursor after (score 11.9, id v_660): each shard returns only its next 20 → merge 1,000
+```
 
 ## Caching
 
-Query popularity is highly skewed; many users search for the same trending terms. A **result cache** keyed by normalized query and filters serves popular searches without touching the shards. Short TTLs keep results fresh.
+Query popularity is highly skewed; many users search for the same trending terms. A **result cache** keyed by normalized query and filters serves popular searches without touching the shards. Short TTLs keep results fresh. Shards also cache frequently used filters (for example, "language:en") as bitsets, which speeds up many different queries that share the filter.
+
+<Ponder question="A query must return the top 10 results across 40 shards. Why does each shard need to return its own top 10, rather than, say, its top 1?">
+The globally best 10 results could all live on a single shard. If each shard returned only its top 1, the coordinator would miss the other nine from that shard. Returning the top K from every shard guarantees the global top K is among the candidates — which is also why deep pages are costly: for page N, each shard must return its top N × page size.
+</Ponder>
 
 <KeyTakeaways>
-- The indexing pipeline consumes change events, analyzes text and writes to index shards, which refresh and merge segments.
+- The indexing pipeline consumes change events, analyzes text and writes to index shards, which refresh and merge segments; versions prevent out-of-order updates from winning.
 - A durable change stream decouples indexing from sources and enables rebuilding the index.
-- Queries use scatter-gather: fan out to all shards, gather top results, merge and re-rank.
+- Queries use scatter-gather, often in two rounds: gather IDs and scores, then fetch fields for the final page.
+- Shards use early-termination algorithms and cached filters to find top-k results without scoring every match.
 - Two-phase ranking applies cheap scoring broadly and expensive models to a few candidates.
-- Result caching and limits on deep pagination keep queries fast.
+- Result caching and cursor-based pagination keep queries fast.
 </KeyTakeaways>
